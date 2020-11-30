@@ -1,0 +1,38 @@
+{
+  "name": "@quentinroy/snow",
+  "version": "0.1.0",
+  "description": "Simple snow animation.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/QuentinRoy/snow"
+  },
+  "main": "dist/snow.js",
+  "types": "dist/snow.d.ts",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "clean": "shx rm -rf dist/*",
+    "prepack": "npm run clean && npm run build",
+    "lint": "eslint **/*.[j|t]s"
+  },
+  "private": false,
+  "files": [
+    "dist/**/*"
+  ],
+  "keywords": [
+    "snow"
+  ],
+  "author": "Quentin Roy <quentin@quentinroy.fr>",
+  "license": "MIT",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.8.2",
+    "eslint": "^7.14.0",
+    "eslint-plugin-tsdoc": "^0.2.8",
+    "shx": "^0.3.3",
+    "typescript": "^4.1.2"
+  },
+  "dependencies": {
+    "eslint-config-prettier": "^6.15.0"
+  }
+}
