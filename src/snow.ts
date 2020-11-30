@@ -1,4 +1,14 @@
-interface SnowOptions {
+interface Snow {
+  /**
+   * Stop the animation.
+   */
+  stop: () => void
+
+  /**
+   * Resume the animation if it was stopped.
+   */
+  resume: () => void
+
   /** Defines the average size of the snow flakes. */
   meanSize: number
   /** Defines the standard deviation from the mean of snow flakes' size. */
@@ -25,123 +35,107 @@ interface SnowOptions {
   sdAngle: number
   /** Display the number of frames per seconds. */
   isFpsShown: boolean
-}
-
-export default class Snow implements SnowOptions {
-  /** {@inheritdoc SnowOptions.meanSize} */
-  public meanSize = 10
-  /** {@inheritdoc SnowOptions.sdSize} */
-  public sdSize = 2
-  /** {@inheritdoc SnowOptions.meanSpeed} */
-  public meanSpeed = 150
-  /** {@inheritdoc SnowOptions.sdSpeed} */
-  public sdSpeed = 10
-  /** {@inheritdoc SnowOptions.meanAngle} */
-  public meanAngle = 0
-  /** {@inheritdoc SnowOptions.sdAngle} */
-  public sdAngle = 5
-  /** {@inheritdoc SnowOptions.color} */
-  public color = "rgba(255,255,255,0.9)"
-  /** {@inheritdoc SnowOptions.flow} */
-  public flow = 0.01
-  /** {@inheritdoc SnowOptions.isFpsShown} */
-  public isFpsShown = false
-
-  /** The canvas used to draw. */
-  public readonly canvas: HTMLCanvasElement
-
-  /**
-   * Creates a Snow instance and immediately start the animation.
-   *
-   * @param canvas - The canvas to draw in.
-   * @param opts - Optional arguments. Each property will be directly mapped to
-   * the Snow property of the same name.
-   */
-  constructor(canvas: HTMLCanvasElement, opts?: Partial<SnowOptions>) {
-    this.canvas = canvas
-    Object.assign(this, opts)
-    this.resume()
-  }
-
-  // Used by the loop.
-  #snowFlakes: SnowFlake[] = []
-  #animationFrameRequest?: number | null = null
-  #lastTime = Date.now()
-  // Remember the decimal part of the number of snow flakes to
-  // create each tick, so it can be added it back on the next tick.
-  #remainerNSnowFlakes = 0
-
-  // This is used for dps measurements.
-  #drawDeltas: number[] = []
-  #maxDrawDeltas = 50
-  #nextDrawDeltaIdx = 0
-
-  #loop = (): void => {
-    let now = Date.now()
-    let deltaTime = (now - this.#lastTime) / 1000
-
-    this.#tick(deltaTime)
-
-    this.#lastTime = now
-
-    // Register FPS information.
-    this.#drawDeltas[this.#nextDrawDeltaIdx] = deltaTime
-    this.#nextDrawDeltaIdx = (this.#nextDrawDeltaIdx + 1) % this.#maxDrawDeltas
-
-    this.draw()
-    this.#animationFrameRequest = requestAnimationFrame(this.#loop)
-  }
-
-  #tick = (deltaTime: number): void => {
-    // Update each snow flake.
-    this.#snowFlakes.forEach((snowFlake) => {
-      snowFlake.tick(deltaTime)
-    })
-
-    // Remove snow flakes that got out.
-    this.#snowFlakes = this.#snowFlakes.filter((snowFlake) =>
-      snowFlake.isInRect(0, 0, this.canvas.width, this.canvas.height)
-    )
-
-    // Create the new snow flakes.
-    let nNewSnowFlakes =
-      Math.random() * this.flow * deltaTime * this.canvas.width +
-      this.#remainerNSnowFlakes
-    this.#remainerNSnowFlakes = nNewSnowFlakes - Math.floor(nNewSnowFlakes)
-    nNewSnowFlakes = Math.floor(nNewSnowFlakes)
-
-    for (let i = 0; i < nNewSnowFlakes; i += 1) {
-      let snowFlake = SnowFlake.newRandom(
-        this.meanSize,
-        this.sdSize,
-        this.meanSpeed,
-        this.sdSpeed,
-        this.meanAngle,
-        this.sdAngle,
-        this.color,
-        this.canvas.width,
-        this.canvas.height
-      )
-      // Spread out the snow flakes in the elapsed window of time.
-      snowFlake.tick(Math.random() * deltaTime)
-      if (
-        snowFlake.size > 0 &&
-        snowFlake.speed > 0 &&
-        snowFlake.isInRect(0, 0, this.canvas.width, this.canvas.height)
-      ) {
-        this.#snowFlakes.push(snowFlake)
-      }
-    }
-  }
 
   /**
    * Redraw the snow flakes (but don't update their position).
    *
    * @remarks You don't usually need to call this method directly.
    */
-  draw(): void {
-    let { width, height } = this.canvas
-    let context = this.canvas.getContext("2d")
+  draw: () => void
+}
+
+type SnowOptions = Partial<Omit<Snow, "draw" | "stop" | "resume">>
+
+const defaultsProps: Required<SnowOptions> = {
+  meanSize: 10,
+  sdSize: 2,
+  meanSpeed: 150,
+  sdSpeed: 10,
+  meanAngle: 0,
+  sdAngle: 5,
+  color: "rgba(255,255,255,0.9)",
+  flow: 0.01,
+  isFpsShown: false,
+}
+
+export default function Snow(
+  canvas: HTMLCanvasElement,
+  opts?: SnowOptions
+): Snow {
+  // Used by the loop.
+  let snowFlakes: SnowFlake[] = []
+  let animationFrameRequest: number | null = null
+  let lastTime = Date.now()
+  // Remember the decimal part of the number of snow flakes to
+  // create each tick, so it can be added it back on the next tick.
+  let remainerNSnowFlakes = 0
+
+  // snow is used for dps measurements.
+  let drawDeltas: number[] = []
+  let maxDrawDeltas = 50
+  let nextDrawDeltaIdx = 0
+
+  const loop = (): void => {
+    let now = Date.now()
+    let deltaTime = (now - lastTime) / 1000
+
+    tick(deltaTime)
+
+    lastTime = now
+
+    // Register FPS information.
+    drawDeltas[nextDrawDeltaIdx] = deltaTime
+    nextDrawDeltaIdx = (nextDrawDeltaIdx + 1) % maxDrawDeltas
+
+    snow.draw()
+    animationFrameRequest = requestAnimationFrame(loop)
+  }
+
+  const tick = (deltaTime: number): void => {
+    // Update each snow flake.
+    snowFlakes.forEach((snowFlake) => {
+      snowFlake.tick(deltaTime)
+    })
+
+    // Remove snow flakes that got out.
+    snowFlakes = snowFlakes.filter((snowFlake) =>
+      snowFlake.isInRect(0, 0, canvas.width, canvas.height)
+    )
+
+    // Create the new snow flakes.
+    let nNewSnowFlakes =
+      Math.random() * snow.flow * deltaTime * canvas.width + remainerNSnowFlakes
+
+    remainerNSnowFlakes = nNewSnowFlakes - Math.floor(nNewSnowFlakes)
+    nNewSnowFlakes = Math.floor(nNewSnowFlakes)
+
+    for (let i = 0; i < nNewSnowFlakes; i += 1) {
+      let snowFlake = SnowFlake.newRandom(
+        snow.meanSize,
+        snow.sdSize,
+        snow.meanSpeed,
+        snow.sdSpeed,
+        snow.meanAngle,
+        snow.sdAngle,
+        snow.color,
+        canvas.width,
+        canvas.height
+      )
+      // Spread out the snow flakes in the elapsed window of time.
+      snowFlake.tick(Math.random() * deltaTime)
+      if (
+        snowFlake.size > 0 &&
+        snowFlake.speed > 0 &&
+        snowFlake.isInRect(0, 0, canvas.width, canvas.height)
+      ) {
+        snowFlakes.push(snowFlake)
+      }
+    }
+  }
+
+  const draw = (): void => {
+    let { width, height } = canvas
+    let context = canvas.getContext("2d")
 
     if (context == null) throw new Error(`Could not fetch canvas' context.`)
 
@@ -149,21 +143,25 @@ export default class Snow implements SnowOptions {
 
     // Draw the snow flakes.
     context.clearRect(0, 0, width, height)
-    for (let i = 0; i < this.#snowFlakes.length; i++) {
-      let snowFlake = this.#snowFlakes[i]
+
+    const n = snowFlakes.length
+
+    context.beginPath()
+    for (let i = 0; i < n; i++) {
+      let snowFlake = snowFlakes[i]
+      let x = snowFlake.x
+      let y = snowFlake.y
       context.fillStyle = snowFlake.color
-      context.beginPath()
-      context.moveTo(snowFlake.x, snowFlake.y)
-      context.arc(snowFlake.x, snowFlake.y, snowFlake.size / 2, 0, 2 * Math.PI)
-      context.fill()
+      context.moveTo(x, y)
+      context.arc(x, y, snowFlake.size / 2, 0, 2 * Math.PI)
     }
+    context.fill()
 
     // Show the FPS counter.
-    if (this.isFpsShown) {
+    if (snow.isFpsShown) {
       let avgDrawDelta =
-        this.#drawDeltas.length > 0
-          ? this.#drawDeltas.reduce((a, b) => a + b, 0) /
-            this.#drawDeltas.length
+        drawDeltas.length > 0
+          ? drawDeltas.reduce((a, b) => a + b, 0) / drawDeltas.length
           : 0
       context.font = "20px sans-serif"
       context.fillStyle = "red"
@@ -173,26 +171,26 @@ export default class Snow implements SnowOptions {
     context.restore()
   }
 
-  /**
-   * Stop the animation.
-   */
-  public stop(): Snow {
-    if (this.#animationFrameRequest != null) {
-      cancelAnimationFrame(this.#animationFrameRequest)
-      this.#animationFrameRequest = null
+  const stop = (): Snow => {
+    if (animationFrameRequest != null) {
+      cancelAnimationFrame(animationFrameRequest)
+      animationFrameRequest = null
     }
-    return this
+    return snow
   }
 
-  /**
-   * Resume the animation if it was stopped.
-   */
-  public resume(): Snow {
-    if (this.#animationFrameRequest == null) {
-      this.#animationFrameRequest = requestAnimationFrame(this.#loop)
+  const resume = (): Snow => {
+    if (animationFrameRequest == null) {
+      animationFrameRequest = requestAnimationFrame(loop)
     }
-    return this
+    return snow
   }
+
+  const snow: Snow = { ...opts, ...defaultsProps, draw, stop, resume }
+
+  resume()
+
+  return snow
 }
 
 class SnowFlake {

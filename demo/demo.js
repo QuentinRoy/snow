@@ -9,7 +9,7 @@ window.addEventListener("resize", () => {
   canvas.height = window.innerHeight
 })
 
-window.snow = new Snow(canvas)
+window.snow = Snow(canvas)
 
 let controls = document.querySelector("#controls")
 let closeButton = controls.querySelector(".close-button")
