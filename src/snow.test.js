@@ -105,3 +105,17 @@ test("removes departed flakes without skipping survivors", () => {
   expect(context.arc).toHaveBeenCalledTimes(1)
   expect(context.arc.mock.calls[0][1]).toBeCloseTo(-4.79)
 })
+
+test("sets the batch color once and keeps the newest flake's color", () => {
+  const { snow, context, frame } = setupAnimation()
+  const setColor = vi.fn(() => {})
+  Object.defineProperty(context, "fillStyle", { get: vi.fn().mockReturnValue(""), set: setColor })
+  frame(100)
+  expect(context.arc).toHaveBeenCalledTimes(5)
+  expect(setColor).toHaveBeenCalledExactlyOnceWith(snow.color)
+
+  setColor.mockClear()
+  snow.color = "blue"
+  frame(200)
+  expect(setColor).toHaveBeenCalledExactlyOnceWith("blue")
+})

@@ -149,12 +149,16 @@ export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): Sno
 
     const n = snowFlakes.length
 
+    if (n > 0) {
+      // A single fill colors the whole path, so keep the last flake's color.
+      context.fillStyle = snowFlakes[n - 1].color
+    }
+
     context.beginPath()
 
     for (let i = 0; i < n; i += 1) {
       const snowFlake = snowFlakes[i]
       const { x, y } = snowFlake
-      context.fillStyle = snowFlake.color
       context.moveTo(x, y)
       context.arc(x, y, snowFlake.size / 2, 0, 2 * Math.PI)
     }
