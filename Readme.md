@@ -9,6 +9,8 @@ A small utility to simulate snow.
 ```
 
 ```js
+import snow from "@quentinroy/snow"
+
 let canvas = document.querySelector("#snow-canvas")
 
 // Optional argument. All options become mutable properties. Check sources
@@ -25,11 +27,11 @@ let options = {
 }
 
 // Create and start the snow animation.
-let snow = new Snow(canvas, options)
+let animation = snow(canvas, options)
 
 // Stop the snow animation.
-snow.stop()
+animation.stop()
 
 // Resume the snow animation.
-snow.resume()
+animation.resume()
 ```

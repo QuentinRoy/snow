@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vite-plus/test"
-import Snow from "./snow"
+import createSnow from "./snow"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -35,8 +35,15 @@ const setupAnimation = () => {
   }
 
   const canvas = { getContext: vi.fn().mockReturnValue(context), height: 100, width: 100 }
-  const snow = Snow(canvas)
-  Object.assign(snow, { flow: 1, meanSize: 10, meanSpeed: 100, sdAngle: 0, sdSize: 0, sdSpeed: 0 })
+  const snow = createSnow(canvas)
+  Object.assign(snow, {
+    flow: 1,
+    meanSize: 10,
+    meanSpeed: 100,
+    sdAngle: 0,
+    sdSize: 0,
+    sdSpeed: 0,
+  })
 
   /** @param {number} time The frame time in milliseconds. */
   const frame = (time) => {
@@ -53,7 +60,7 @@ test("starts, stops, and resumes the animation", () => {
   vi.stubGlobal("requestAnimationFrame", requestFrame)
   vi.stubGlobal("cancelAnimationFrame", cancelFrame)
 
-  const snow = Snow({ getContext: vi.fn().mockReturnValue({}) })
+  const snow = createSnow({ getContext: vi.fn().mockReturnValue({}) })
   expect(requestFrame).toHaveBeenCalledTimes(1)
 
   snow.stop()
@@ -120,7 +127,7 @@ test("sets the batch color once and keeps the newest flake's color", () => {
   expect(setColor).toHaveBeenCalledExactlyOnceWith("blue")
 })
 
-test("constructor options override defaults, including zero and false", () => {
+test("options override defaults, including zero and false", () => {
   const { canvas } = setupAnimation()
 
   const options = {
@@ -135,9 +142,9 @@ test("constructor options override defaults, including zero and false", () => {
     sdSpeed: 0,
   }
 
-  const snow = Snow(canvas, options)
+  const snow = createSnow(canvas, options)
   expect(snow).toMatchObject(options)
-  expect(Snow(canvas, { flow: 0 }).meanSize).toBe(10)
+  expect(createSnow(canvas, { flow: 0 }).meanSize).toBe(10)
 })
 
 test("reuses the context across frames and canvas resizes", () => {
@@ -154,5 +161,5 @@ test("reuses the context across frames and canvas resizes", () => {
 test("rejects a canvas without a 2D context", () => {
   const { canvas } = setupAnimation()
   canvas.getContext.mockReturnValue(null)
-  expect(() => Snow(canvas)).toThrow("Could not fetch canvas' context.")
+  expect(() => createSnow(canvas)).toThrow("Could not fetch canvas' context.")
 })

@@ -1,4 +1,4 @@
-import Snow from "./snow.js"
+import snow from "./snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 
@@ -11,7 +11,7 @@ window.addEventListener("resize", () => {
   canvas.height = window.innerHeight
 })
 
-window.snow = Snow(canvas)
+window.snow = snow(canvas)
 
 const controls = document.querySelector("#controls")
 const closeButton = controls.querySelector(".close-button")
@@ -24,10 +24,10 @@ const openControls = () => {
   controls.classList.remove("hidden")
 }
 
-const areControlsOpened = () => controls.classList.contains("hidden")
+const areControlsHidden = () => controls.classList.contains("hidden")
 
 closeButton.addEventListener("click", () => {
-  if (areControlsOpened()) {
+  if (areControlsHidden()) {
     openControls()
   } else {
     closeControls()
@@ -36,10 +36,10 @@ closeButton.addEventListener("click", () => {
 
 controls.addEventListener(
   "click",
-  (evt) => {
-    if (areControlsOpened()) {
+  (event) => {
+    if (areControlsHidden()) {
       openControls()
-      evt.stopPropagation()
+      event.stopPropagation()
     }
   },
   // Make sure the control divs get the event *before* the open button.
