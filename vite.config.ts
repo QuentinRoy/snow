@@ -10,7 +10,7 @@ export default defineConfig({
   lint: {
     env: core.env,
     extends: [core, antiSlop, tsdoc],
-    ignorePatterns: core.ignorePatterns,
+    ignorePatterns: [...(core.ignorePatterns ?? []), "demo/snow.js"],
     jsPlugins: tsdoc.jsPlugins,
     options: { typeAware: true, typeCheck: true },
     overrides: [
