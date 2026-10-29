@@ -91,3 +91,17 @@ test("keeps a flake's direction and speed between frames", () => {
   expect(context.arc.mock.calls[0][0]).toBeCloseTo(48.5)
   expect(context.arc.mock.calls[0][1]).toBeCloseTo(-5 + 1.5 * Math.sqrt(3))
 })
+
+test("removes departed flakes without skipping survivors", () => {
+  const { snow, context, canvas, frame } = setupAnimation()
+  frame(20)
+  snow.meanSpeed = 1
+  frame(40)
+  snow.flow = 0
+  canvas.height = 0
+  frame(140)
+  context.arc.mockClear()
+  frame(240)
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0][1]).toBeCloseTo(-4.79)
+})

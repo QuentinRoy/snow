@@ -60,7 +60,7 @@ const defaultsProps: Required<SnowOptions> = {
 
 export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): SnowAnimation {
   // Used by the loop.
-  let snowFlakes: SnowFlake[] = []
+  const snowFlakes: SnowFlake[] = []
   let animationFrameRequest: number | null = null
   let lastTime = Date.now()
   // Remember the decimal part of the number of snow flakes to
@@ -89,15 +89,18 @@ export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): Sno
   }
 
   const tick = (deltaTime: number): void => {
-    // Update each snow flake.
+    let nSurvivingSnowFlakes = 0
+
     for (const snowFlake of snowFlakes) {
       snowFlake.tick(deltaTime)
+
+      if (snowFlake.isInRect(0, 0, canvas.width, canvas.height)) {
+        snowFlakes[nSurvivingSnowFlakes] = snowFlake
+        nSurvivingSnowFlakes += 1
+      }
     }
 
-    // Remove snow flakes that got out.
-    snowFlakes = snowFlakes.filter((snowFlake) =>
-      snowFlake.isInRect(0, 0, canvas.width, canvas.height),
-    )
+    snowFlakes.length = nSurvivingSnowFlakes
 
     // Create the new snow flakes.
     let nNewSnowFlakes = Math.random() * snow.flow * deltaTime * canvas.width + remainerNSnowFlakes
