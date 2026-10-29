@@ -74,7 +74,7 @@ export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): Sno
 
   const loop = (): void => {
     const now = Date.now()
-    const deltaTime = (now - lastTime) / 1000
+    const deltaTime = Math.min((now - lastTime) / 1000, 0.1)
 
     tick(deltaTime)
 
@@ -181,7 +181,10 @@ export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): Sno
   }
 
   const resume = (): SnowAnimation => {
-    animationFrameRequest ??= requestAnimationFrame(loop)
+    if (animationFrameRequest === null) {
+      lastTime = Date.now()
+      animationFrameRequest = requestAnimationFrame(loop)
+    }
 
     return snow
   }
