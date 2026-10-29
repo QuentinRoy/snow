@@ -2,14 +2,14 @@ import snow from "./snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 
-canvas.width = window.innerWidth
+const resizeCanvas = () => {
+  canvas.width = Math.round(canvas.clientWidth * window.devicePixelRatio)
+  canvas.height = Math.round(canvas.clientHeight * window.devicePixelRatio)
+}
 
-canvas.height = window.innerHeight
+resizeCanvas()
 
-window.addEventListener("resize", () => {
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
-})
+window.addEventListener("resize", resizeCanvas)
 
 window.snow = snow(canvas)
 
@@ -42,9 +42,7 @@ controls.addEventListener(
       event.stopPropagation()
     }
   },
-  // Make sure the control divs get the event *before* the open button.
-  // Otherwise, after the button opens the controls, the controls div would
-  // received this event and close it.
+  // Capture first so opening the controls does not immediately close them.
   { capture: true },
 )
 
@@ -58,6 +56,7 @@ for (const input of document.querySelectorAll("#controls > .control > input")) {
       break
     }
 
+    case "autoFill":
     case "isFpsShown": {
       input.checked = window.snow[input.id]
       input.addEventListener("change", () => {
