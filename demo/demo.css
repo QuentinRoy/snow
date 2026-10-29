@@ -12,6 +12,10 @@
   --control-text-color: var(--control-border-color);
   --control-button-halo: var(--control-halo-color);
 }
+html {
+  height: 100%;
+}
+
 body {
   height: 100%;
   margin: 0;
