@@ -19,16 +19,11 @@ interface SnowAnimation {
   meanSpeed: number
   /** Defines the standard deviation from the mean of snow flakes' speed. */
   sdSpeed: number
-  /** Defines the number of snow flakes to create per second and per pixels. */
+  /** Controls the creation rate per second and per pixel of canvas width. */
   flow: number
   /**
-   * Indicates the average direction in degrees of the snowflake.
-   * meanAngle = 0 that the snow flakes fall vertically.
-   *
-   * @remarks Currently, meanAngle != 0 creates a zone in the viewport with
-   * less snow flakes, and meanAngle &gt;= 90 is not supported.
-   *
-   * @experimental
+   * Defines the average direction in degrees from vertically downward.
+   * Flakes enter from the edges they move inward through.
    */
   meanAngle: number
   /** Defines the standard deviation from the mean of snow flakes' angle. */
@@ -244,33 +239,11 @@ class SnowFlake {
     canvasWidth: number,
     canvasHeight: number,
   ): SnowFlake {
-    // We compute the size first because the initial y value depends on it.
     const size = randomNormal(meanSize, sdSize)
-    const edgePosition = Math.random() * canvasWidth
-    let x
-    let y
 
-    if (edgePosition < canvasWidth) {
-      // Case the snow flake should be created at the top
-      x = Math.random() * canvasWidth
-      y = -size / 2
-    } else if (edgePosition < canvasWidth + canvasHeight) {
-      // Case the snow flake should be created at the right
-      x = size / 2 + canvasWidth
-      y = Math.random() * canvasHeight
-    } else if (edgePosition < 2 * canvasWidth + canvasHeight) {
-      // Case the snow flake should be created at the bottom
-      x = Math.random() * canvasWidth
-      y = canvasHeight + size / 2
-    } else {
-      // Case the snow flake should be created at the left
-      x = -size / 2
-      y = Math.random() * canvasHeight
-    }
-
-    return new SnowFlake(
-      x,
-      y,
+    const snowFlake = new SnowFlake(
+      0,
+      0,
       color,
       randomNormal(meanSpeed, sdSpeed),
       randomNormal(
@@ -280,6 +253,22 @@ class SnowFlake {
       ),
       size,
     )
+
+    // Use the removal bounds and weight edges by inward motion to keep coverage even.
+    const width = canvasWidth + size
+    const height = canvasHeight + size
+    const horizontalEdgeWeight = width * Math.abs(snowFlake.velocityY)
+    const verticalEdgeWeight = height * Math.abs(snowFlake.velocityX)
+
+    if (Math.random() * (horizontalEdgeWeight + verticalEdgeWeight) < horizontalEdgeWeight) {
+      snowFlake.x = Math.random() * width - size / 2
+      snowFlake.y = snowFlake.velocityY > 0 ? -size / 2 : canvasHeight + size / 2
+    } else {
+      snowFlake.x = snowFlake.velocityX > 0 ? -size / 2 : canvasWidth + size / 2
+      snowFlake.y = Math.random() * height - size / 2
+    }
+
+    return snowFlake
   }
 
   isInRectangle(x: number, y: number, width: number, height: number) {

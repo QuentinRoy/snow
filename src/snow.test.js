@@ -99,6 +99,70 @@ test("keeps a flake's direction and speed between frames", () => {
   expect(context.arc.mock.calls[0][1]).toBeCloseTo(-5 + 1.5 * Math.sqrt(3))
 })
 
+test.each([
+  { angle: 0, x: 50, y: -4 },
+  { angle: 90, x: 104, y: 50 },
+  { angle: -90, x: -4, y: 50 },
+  { angle: 180, x: 50, y: 104 },
+  { angle: 60, x: 104.134, y: 50.5 },
+  { angle: -60, x: -4.134, y: 50.5 },
+  { angle: 120, x: 104.134, y: 49.5 },
+  { angle: -120, x: -4.134, y: 49.5 },
+])("flakes enter from an incoming edge at $angle degrees", ({ angle, x, y }) => {
+  const { context, frame, snow } = setupAnimation()
+  snow.meanAngle = angle
+  frame(20)
+
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0][0]).toBeCloseTo(x)
+  expect(context.arc.mock.calls[0][1]).toBeCloseTo(y)
+})
+
+test("chooses an incoming edge using the flake's direction rather than the mean", () => {
+  const { context, frame, snow } = setupAnimation()
+  snow.sdAngle = 90
+  frame(20)
+
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0][0]).toBeGreaterThan(100)
+  expect(context.arc.mock.calls[0][1]).toBeGreaterThan(0)
+  expect(context.arc.mock.calls[0][1]).toBeLessThan(100)
+})
+
+test.each([
+  { angle: 60, height: 100, width: 300, x: 149.134, y: -4.5 },
+  { angle: 30, height: 300, width: 100, x: 104.5, y: 150.866 },
+])("weights incoming edges for a $width by $height canvas", ({ angle, height, width, x, y }) => {
+  const { canvas, context, frame, snow } = setupAnimation()
+  canvas.width = width
+  canvas.height = height
+  snow.meanAngle = angle
+  frame(20)
+
+  expect(context.arc.mock.calls[0][0]).toBeCloseTo(x)
+  expect(context.arc.mock.calls[0][1]).toBeCloseTo(y)
+})
+
+test.each([
+  { angle: 0, count: 5, height: 100, width: 100 },
+  { angle: 60, count: 5, height: 100, width: 100 },
+  { angle: 90, count: 5, height: 100, width: 100 },
+  { angle: 180, count: 5, height: 100, width: 100 },
+  { angle: 60, count: 5, height: 500, width: 100 },
+  { angle: 60, count: 10, height: 100, width: 200 },
+])(
+  "keeps the creation rate at $angle degrees on a $width by $height canvas",
+  ({ angle, count, height, width }) => {
+    const { canvas, context, frame, snow } = setupAnimation()
+    canvas.width = width
+    canvas.height = height
+    snow.meanAngle = angle
+    frame(100)
+
+    expect(context.arc).toHaveBeenCalledTimes(count)
+  },
+)
+
 test("removes departed flakes without skipping survivors", () => {
   const { snow, context, canvas, frame } = setupAnimation()
   frame(20)

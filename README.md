@@ -62,21 +62,21 @@ The URL loads the latest published version. For production, [pin a version](http
 
 All options become mutable properties on the returned animation. Sizes and speeds use canvas pixels.
 
-| Option       | Default                   | Meaning                                                                                              |
-| ------------ | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `meanSize`   | `10`                      | Average flake diameter, in pixels.                                                                   |
-| `sdSize`     | `2`                       | Standard deviation of flake diameters, in pixels.                                                    |
-| `color`      | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                                  |
-| `meanSpeed`  | `150`                     | Average flake speed, in pixels per second.                                                           |
-| `sdSpeed`    | `10`                      | Standard deviation of flake speeds, in pixels per second.                                            |
-| `flow`       | `0.01`                    | Snowfall density. Higher values create more flakes; the creation rate also scales with canvas width. |
-| `meanAngle`  | `0`                       | Average direction, in degrees from vertically downward. Experimental; see below.                     |
-| `sdAngle`    | `5`                       | Standard deviation of flake directions, in degrees.                                                  |
-| `isFpsShown` | `false`                   | Show the frame rate on the canvas.                                                                   |
+| Option       | Default                   | Meaning                                                                                          |
+| ------------ | ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `meanSize`   | `10`                      | Average flake diameter, in pixels.                                                               |
+| `sdSize`     | `2`                       | Standard deviation of flake diameters, in pixels.                                                |
+| `color`      | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                              |
+| `meanSpeed`  | `150`                     | Average flake speed, in pixels per second.                                                       |
+| `sdSpeed`    | `10`                      | Standard deviation of flake speeds, in pixels per second.                                        |
+| `flow`       | `0.01`                    | Creation rate. Higher values create more flakes; the rate scales with canvas width.              |
+| `meanAngle`  | `0`                       | Average direction, in degrees from vertically downward: 90 is left, 180 is up, and -90 is right. |
+| `sdAngle`    | `5`                       | Standard deviation of flake directions, in degrees.                                              |
+| `isFpsShown` | `false`                   | Show the frame rate on the canvas.                                                               |
 
 Size, speed, and direction are sampled from normal distributions. Flakes with a nonpositive size or speed are discarded. The creation rate is randomized, so `flow` does not specify an exact number of flakes per second.
 
-Angled snowfall is experimental: a nonzero `meanAngle` can leave areas with fewer flakes, and values of 90 degrees or greater are unsupported.
+Each flake enters from an edge it moves inward through, based on its own direction. Diagonal flakes can enter from either incoming edge, with the balance based on the edge lengths and the direction. Horizontal and upward motion are also supported. The creation rate stays tied to canvas width for every direction, so the number of visible flakes can change with direction.
 
 ## Animation controls
 
