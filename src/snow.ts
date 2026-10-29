@@ -196,7 +196,7 @@ export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): Sno
     return snow
   }
 
-  const snow: SnowAnimation = { ...opts, ...defaultsProps, draw, stop, resume }
+  const snow: SnowAnimation = { ...defaultsProps, ...opts, draw, stop, resume }
 
   resume()
 

@@ -119,3 +119,23 @@ test("sets the batch color once and keeps the newest flake's color", () => {
   frame(200)
   expect(setColor).toHaveBeenCalledExactlyOnceWith("blue")
 })
+
+test("constructor options override defaults, including zero and false", () => {
+  const { canvas } = setupAnimation()
+
+  const options = {
+    color: "blue",
+    flow: 0,
+    isFpsShown: false,
+    meanAngle: 30,
+    meanSize: 4,
+    meanSpeed: 80,
+    sdAngle: 0,
+    sdSize: 0,
+    sdSpeed: 0,
+  }
+
+  const snow = Snow(canvas, options)
+  expect(snow).toMatchObject(options)
+  expect(Snow(canvas, { flow: 0 }).meanSize).toBe(10)
+})
