@@ -67,6 +67,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   let width = 0
   let height = 0
   let previousDensity = -1
+  let targetFlakeCount = 0
   let previousSettings: SnowSettings = { ...defaultOptions, ...options }
 
   // Keep recent frame durations for the FPS counter.
@@ -80,10 +81,23 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
     synchronize()
 
+    let flakesToRetire = Math.max(0, snowFlakes.length - targetFlakeCount)
+    let survivingCount = 0
+
     for (const snowFlake of snowFlakes) {
-      snowFlake.tick(deltaTime, width, height)
+      const hasExited = snowFlake.tick(deltaTime, width, height)
+
+      // Preserve visible flakes after shrinking; remove excess at the edge.
+      if (hasExited && flakesToRetire > 0) {
+        flakesToRetire -= 1
+        continue
+      }
+
+      snowFlakes[survivingCount] = snowFlake
+      survivingCount += 1
     }
 
+    snowFlakes.length = survivingCount
     lastFrameTime = now
 
     frameDurations[nextFrameDurationIndex] = deltaTime
@@ -143,7 +157,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     let survivingCount = 0
 
     for (const snowFlake of snowFlakes) {
-      if (snowFlake.isInRectangle(overlapWidth, overlapHeight)) {
+      if (nextWidth > 0 && nextHeight > 0 && snowFlake.isInRectangle(overlapWidth, overlapHeight)) {
         snowFlakes[survivingCount] = snowFlake
         survivingCount += 1
       }
@@ -151,7 +165,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
     snowFlakes.length = survivingCount
 
-    while (snowFlakes.length > overlapCount) {
+    while (animation.density !== previousDensity && snowFlakes.length > overlapCount) {
       const index = Math.floor(Math.random() * snowFlakes.length)
       const lastFlake = snowFlakes.pop()
 
@@ -175,6 +189,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     width = nextWidth
     height = nextHeight
     previousDensity = animation.density
+    targetFlakeCount = count
   }
 
   const render = (): void => {
@@ -298,10 +313,11 @@ class SnowFlake {
     }
   }
 
-  tick(deltaTime: number, width: number, height: number): void {
+  tick(deltaTime: number, width: number, height: number): boolean {
     this.x += this.velocityX * deltaTime
     this.y += this.velocityY * deltaTime
     const radius = this.size / 2
+    const hasExited = !this.isInRectangle(width, height)
 
     // Hidden flakes enter on their first wrap, without a separate creation rate.
     if (this.x < -radius || this.x > width + radius) {
@@ -313,6 +329,8 @@ class SnowFlake {
       this.isVisible = true
       this.y = wrap(this.y + radius, height + this.size) - radius
     }
+
+    return hasExited
   }
 
   isInRectangle(width: number, height: number): boolean {

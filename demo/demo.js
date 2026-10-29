@@ -3,15 +3,26 @@ import snow from "./snow.js"
 const canvas = document.querySelector("#snow-canvas")
 
 const resizeCanvas = () => {
-  canvas.width = Math.round(canvas.clientWidth * window.devicePixelRatio)
-  canvas.height = Math.round(canvas.clientHeight * window.devicePixelRatio)
+  const width = window.innerWidth
+  const height = window.innerHeight
+  // Keep the previous bitmap at its drawn size until the replacement is ready.
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  canvas.width = Math.round(width * window.devicePixelRatio)
+  canvas.height = Math.round(height * window.devicePixelRatio)
 }
 
 resizeCanvas()
 
-window.addEventListener("resize", resizeCanvas)
+/** @type {ReturnType<typeof import("../src/snow").default>} */
+const animation = snow(canvas)
 
-window.snow = snow(canvas)
+window.snow = animation
+
+window.addEventListener("resize", () => {
+  resizeCanvas()
+  animation.draw()
+})
 
 const controls = document.querySelector("#controls")
 const closeButton = controls.querySelector(".close-button")

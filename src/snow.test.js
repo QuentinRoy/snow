@@ -88,14 +88,14 @@ test("fills immediately at the configured density and scales with area", () => {
 test.each([
   { count: 8, height: 100, newX: 150, newY: 50, width: 200 },
   { count: 8, height: 200, newX: 50, newY: 150, width: 100 },
-  { count: 4, height: 50, newX: 150, newY: 25, width: 200 },
+  { count: 6, height: 50, newX: 150, newY: 25, width: 200 },
 ])(
   "preserves overlap and fills exposed space at $width by $height",
   ({ count, height, newX, newY, width }) => {
     const { context, resize } = setupAnimation({ density: 400 })
     resize(width, height)
     expect(context.arc).toHaveBeenCalledTimes(count)
-    expect(context.arc.mock.calls).toContainEqual([50, 50, 5, 0, 2 * Math.PI])
+    expect(context.arc.mock.calls.filter(([x, y]) => x === 50 && y === 50)).toHaveLength(4)
     expect(context.arc.mock.calls).toContainEqual([newX, newY, 5, 0, 2 * Math.PI])
   },
 )
@@ -312,3 +312,32 @@ test("preserves existing flakes when fractional counts round differently after g
   expect(context.arc.mock.calls.filter(([x]) => x === 50)).toHaveLength(2)
   expect(context.arc.mock.calls.filter(([x]) => x === 150)).toHaveLength(1)
 })
+
+test.each([
+  { angle: 0, exitTime: 100, height: 50, width: 100, x: 50, y: 0 },
+  { angle: -90, exitTime: 100, height: 100, width: 50, x: 0, y: 50 },
+  { angle: 90, exitTime: 600, height: 100, width: 50, x: 50, y: 50 },
+  { angle: 180, exitTime: 600, height: 50, width: 100, x: 50, y: 50 },
+])(
+  "keeps visible flakes after shrinking and retires excess at the edge at $angle degrees",
+  ({ angle, exitTime, height, width, x, y }) => {
+    const { context, frame, resize } = setupAnimation({ density: 400, meanAngle: angle })
+    resize(width, height)
+    expect(context.arc).toHaveBeenCalledTimes(4)
+    expect(
+      context.arc.mock.calls.every(
+        ([flakeX, flakeY, radius]) => flakeX === 50 && flakeY === 50 && radius === 5,
+      ),
+    ).toBe(true)
+    frame(20)
+    expect(context.arc).toHaveBeenCalledTimes(4)
+
+    for (let time = 100; time <= exitTime; time += 100) {
+      frame(time)
+    }
+
+    expect(context.arc).toHaveBeenCalledTimes(2)
+    expect(context.arc.mock.calls[0][0]).toBeCloseTo(x)
+    expect(context.arc.mock.calls[0][1]).toBeCloseTo(y)
+  },
+)

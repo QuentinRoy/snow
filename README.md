@@ -31,7 +31,7 @@ const animation = snow(canvas, { color: "white", density: 30, autoFill: true })
 
 The options argument is optional. Call `snow(canvas)` to use the defaults.
 
-Snow measures the displayed canvas in CSS pixels and scales its drawing to the canvas resolution. Set `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio` to keep the drawing sharp on high-resolution screens. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation. See the [demo](demo/demo.js) for a canvas that resizes with the window.
+Snow measures the displayed canvas in CSS pixels and scales its drawing to the canvas resolution. Set `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio` to keep the drawing sharp on high-resolution screens. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation. Update the CSS size, canvas resolution, and drawing together when resizing; call `animation.draw()` immediately after changing the canvas dimensions. The [demo](demo/demo.js) does this in its window resize handler to avoid stretching the previous frame.
 
 ## Without a bundler
 
@@ -75,11 +75,11 @@ All options become mutable properties on the returned animation. Sizes and speed
 | `sdAngle`    | `5`                       | Standard deviation of flake directions, in degrees.                                              |
 | `isFpsShown` | `false`                   | Show the frame rate on the canvas.                                                               |
 
-The population scales with displayed area: `density: 30` gives 30 flakes on a 1,000 × 1,000 canvas and 120 on a 2,000 × 2,000 canvas. Counts are rounded to the nearest whole flake. Density must be finite and nonnegative; `0` clears the snow.
+The population scales with displayed area: `density: 30` gives 30 flakes on a 1,000 × 1,000 canvas and 120 on a 2,000 × 2,000 canvas. Target counts are rounded to the nearest whole flake. Density must be finite and nonnegative; `0` clears the snow.
 
 Flakes wrap around to the opposite side after leaving the canvas, keeping their size, speed, and direction. Changing speed or direction does not change the population. Size, speed, and direction are sampled from normal distributions. Negative sizes and speeds are clamped to zero: zero-size flakes are invisible, and zero-speed flakes stay still.
 
-With `autoFill: true`, flakes cover the canvas before the first frame. Resizing preserves flakes in the overlapping area, removes flakes outside the new bounds, and fills newly exposed areas at the configured density. This also handles a canvas becoming wider and shorter at the same time.
+With `autoFill: true`, flakes cover the canvas before the first frame. Resizing preserves flakes in the overlapping area, removes flakes outside the new bounds, and fills newly exposed areas at the configured density. This also handles a canvas becoming wider and shorter at the same time. Shrinking can leave more flakes than the target count; excess flakes are removed as they leave the canvas, so visible flakes do not disappear to meet an exact count.
 
 With `autoFill: false`, the canvas starts empty and snow enters through the incoming edges. Newly exposed areas after resizing fill through motion too. Slower flakes take longer to enter; stationary flakes remain hidden until `autoFill` is enabled.
 
