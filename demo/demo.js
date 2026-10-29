@@ -1,7 +1,9 @@
 import Snow from "../dist/snow.js"
 
-let canvas = document.querySelector("#snow-canvas")
+const canvas = document.querySelector("#snow-canvas")
+
 canvas.width = window.innerWidth
+
 canvas.height = window.innerHeight
 
 window.addEventListener("resize", () => {
@@ -11,20 +13,18 @@ window.addEventListener("resize", () => {
 
 window.snow = Snow(canvas)
 
-let controls = document.querySelector("#controls")
-let closeButton = controls.querySelector(".close-button")
+const controls = document.querySelector("#controls")
+const closeButton = controls.querySelector(".close-button")
 
-function closeControls() {
+const closeControls = () => {
   controls.classList.add("hidden")
 }
 
-function openControls() {
+const openControls = () => {
   controls.classList.remove("hidden")
 }
 
-function areControlsOpened() {
-  return controls.classList.contains("hidden")
-}
+const areControlsOpened = () => controls.classList.contains("hidden")
 
 closeButton.addEventListener("click", () => {
   if (areControlsOpened()) {
@@ -45,30 +45,35 @@ controls.addEventListener(
   // Make sure the control divs get the event *before* the open button.
   // Otherwise, after the button opens the controls, the controls div would
   // received this event and close it.
-  { capture: true }
+  { capture: true },
 )
 
-document.querySelectorAll("#controls > .control > input").forEach((input) => {
+for (const input of document.querySelectorAll("#controls > .control > input")) {
   switch (input.id) {
-    case "color":
+    case "color": {
       input.value = window.snow[input.id]
       input.addEventListener("change", () => {
         window.snow[input.id] = input.value
       })
       break
-    case "isFpsShown":
+    }
+
+    case "isFpsShown": {
       input.checked = window.snow[input.id]
       input.addEventListener("change", () => {
         window.snow[input.id] = input.checked
       })
       break
-    default:
+    }
+
+    default: {
       input.value = window.snow[input.id]
       input.addEventListener("change", () => {
         window.snow[input.id] = +input.value
       })
       break
+    }
   }
-})
+}
 
 setTimeout(closeControls, 500)

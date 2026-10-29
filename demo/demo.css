@@ -69,7 +69,8 @@ h1 {
   border-width: var(--control-border-width);
   border-radius: 2px;
   border-color: var(--control-border-color);
-  box-shadow: 0 0 var(--control-halo-width) var(--control-halo-color),
+  box-shadow:
+    0 0 var(--control-halo-width) var(--control-halo-color),
     inset 0 0 var(--control-halo-width) var(--control-halo-color);
 }
 

@@ -1,4 +1,4 @@
-interface Snow {
+interface SnowAnimation {
   /**
    * Stop the animation.
    */
@@ -44,7 +44,7 @@ interface Snow {
   draw: () => void
 }
 
-type SnowOptions = Partial<Omit<Snow, "draw" | "stop" | "resume">>
+type SnowOptions = Partial<Omit<SnowAnimation, "draw" | "stop" | "resume">>
 
 const defaultsProps: Required<SnowOptions> = {
   meanSize: 10,
@@ -58,10 +58,7 @@ const defaultsProps: Required<SnowOptions> = {
   isFpsShown: false,
 }
 
-export default function Snow(
-  canvas: HTMLCanvasElement,
-  opts?: SnowOptions
-): Snow {
+export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): SnowAnimation {
   // Used by the loop.
   let snowFlakes: SnowFlake[] = []
   let animationFrameRequest: number | null = null
@@ -71,13 +68,13 @@ export default function Snow(
   let remainerNSnowFlakes = 0
 
   // snow is used for dps measurements.
-  let drawDeltas: number[] = []
-  let maxDrawDeltas = 50
+  const drawDeltas: number[] = []
+  const maxDrawDeltas = 50
   let nextDrawDeltaIdx = 0
 
   const loop = (): void => {
-    let now = Date.now()
-    let deltaTime = (now - lastTime) / 1000
+    const now = Date.now()
+    const deltaTime = (now - lastTime) / 1000
 
     tick(deltaTime)
 
@@ -93,24 +90,23 @@ export default function Snow(
 
   const tick = (deltaTime: number): void => {
     // Update each snow flake.
-    snowFlakes.forEach((snowFlake) => {
+    for (const snowFlake of snowFlakes) {
       snowFlake.tick(deltaTime)
-    })
+    }
 
     // Remove snow flakes that got out.
     snowFlakes = snowFlakes.filter((snowFlake) =>
-      snowFlake.isInRect(0, 0, canvas.width, canvas.height)
+      snowFlake.isInRect(0, 0, canvas.width, canvas.height),
     )
 
     // Create the new snow flakes.
-    let nNewSnowFlakes =
-      Math.random() * snow.flow * deltaTime * canvas.width + remainerNSnowFlakes
+    let nNewSnowFlakes = Math.random() * snow.flow * deltaTime * canvas.width + remainerNSnowFlakes
 
     remainerNSnowFlakes = nNewSnowFlakes - Math.floor(nNewSnowFlakes)
     nNewSnowFlakes = Math.floor(nNewSnowFlakes)
 
     for (let i = 0; i < nNewSnowFlakes; i += 1) {
-      let snowFlake = SnowFlake.newRandom(
+      const snowFlake = SnowFlake.newRandom(
         snow.meanSize,
         snow.sdSize,
         snow.meanSpeed,
@@ -119,10 +115,12 @@ export default function Snow(
         snow.sdAngle,
         snow.color,
         canvas.width,
-        canvas.height
+        canvas.height,
       )
+
       // Spread out the snow flakes in the elapsed window of time.
       snowFlake.tick(Math.random() * deltaTime)
+
       if (
         snowFlake.size > 0 &&
         snowFlake.speed > 0 &&
@@ -134,10 +132,12 @@ export default function Snow(
   }
 
   const draw = (): void => {
-    let { width, height } = canvas
-    let context = canvas.getContext("2d")
+    const { width, height } = canvas
+    const context = canvas.getContext("2d")
 
-    if (context == null) throw new Error(`Could not fetch canvas' context.`)
+    if (context === null) {
+      throw new Error(`Could not fetch canvas' context.`)
+    }
 
     context.save()
 
@@ -147,22 +147,22 @@ export default function Snow(
     const n = snowFlakes.length
 
     context.beginPath()
-    for (let i = 0; i < n; i++) {
-      let snowFlake = snowFlakes[i]
-      let x = snowFlake.x
-      let y = snowFlake.y
+
+    for (let i = 0; i < n; i += 1) {
+      const snowFlake = snowFlakes[i]
+      const { x, y } = snowFlake
       context.fillStyle = snowFlake.color
       context.moveTo(x, y)
       context.arc(x, y, snowFlake.size / 2, 0, 2 * Math.PI)
     }
+
     context.fill()
 
     // Show the FPS counter.
     if (snow.isFpsShown) {
-      let avgDrawDelta =
-        drawDeltas.length > 0
-          ? drawDeltas.reduce((a, b) => a + b, 0) / drawDeltas.length
-          : 0
+      const avgDrawDelta =
+        drawDeltas.length > 0 ? drawDeltas.reduce((a, b) => a + b, 0) / drawDeltas.length : 0
+
       context.font = "20px sans-serif"
       context.fillStyle = "red"
       context.fillText(`${Math.round(1 / avgDrawDelta)} FPS`, 10, 30)
@@ -171,22 +171,22 @@ export default function Snow(
     context.restore()
   }
 
-  const stop = (): Snow => {
-    if (animationFrameRequest != null) {
+  const stop = (): SnowAnimation => {
+    if (animationFrameRequest !== null) {
       cancelAnimationFrame(animationFrameRequest)
       animationFrameRequest = null
     }
+
     return snow
   }
 
-  const resume = (): Snow => {
-    if (animationFrameRequest == null) {
-      animationFrameRequest = requestAnimationFrame(loop)
-    }
+  const resume = (): SnowAnimation => {
+    animationFrameRequest ??= requestAnimationFrame(loop)
+
     return snow
   }
 
-  const snow: Snow = { ...opts, ...defaultsProps, draw, stop, resume }
+  const snow: SnowAnimation = { ...opts, ...defaultsProps, draw, stop, resume }
 
   resume()
 
@@ -194,18 +194,26 @@ export default function Snow(
 }
 
 class SnowFlake {
-  constructor(
-    public x: number,
-    public y: number,
-    public color: string,
-    public speed: number,
-    public angle: number,
-    public size: number
-  ) {}
+  x: number
+  y: number
+  color: string
+  speed: number
+  angle: number
+  size: number
+
+  constructor(x: number, y: number, color: string, speed: number, angle: number, size: number) {
+    this.x = x
+    this.y = y
+    this.color = color
+    this.speed = speed
+    this.angle = angle
+    this.size = size
+  }
 
   tick(this: SnowFlake, deltaTime: number) {
     this.x += Math.cos(this.angle) * this.speed * deltaTime
     this.y -= Math.sin(this.angle) * this.speed * deltaTime
+
     return this
   }
 
@@ -218,12 +226,14 @@ class SnowFlake {
     sdAngle: number,
     color: string,
     canvasWidth: number,
-    canvasHeight: number
+    canvasHeight: number,
   ): SnowFlake {
     // We compute the size first because the initial y value depends on it.
-    let size = randomNormal(meanSize, sdSize)
-    let projectedPos = Math.random() * canvasWidth
-    let x, y
+    const size = randomNormal(meanSize, sdSize)
+    const projectedPos = Math.random() * canvasWidth
+    let x
+    let y
+
     if (projectedPos < canvasWidth) {
       // Case the snow flake should be created at the top
       x = Math.random() * canvasWidth
@@ -250,9 +260,9 @@ class SnowFlake {
       randomNormal(
         // Convert the API angle to trigonometric angle.
         toRad(270 - meanAngle),
-        toRad(sdAngle)
+        toRad(sdAngle),
       ),
-      size
+      size,
     )
   }
 
@@ -266,17 +276,20 @@ class SnowFlake {
   }
 }
 
-function randomNormal(mean = 0, sd = 1) {
+const randomNormal = (mean = 0, sd = 1) => {
   let u = 0
   let v = 0
-  while (u === 0) u = Math.random() // Convert [0,1) to (0,1).
-  while (v === 0) v = Math.random()
-  return (
-    Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * Math.abs(sd) +
-    mean
-  )
+
+  // Avoid zero because its logarithm is undefined.
+  while (u === 0) {
+    u = Math.random()
+  }
+
+  while (v === 0) {
+    v = Math.random()
+  }
+
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * Math.abs(sd) + mean
 }
 
-function toRad(alpha: number) {
-  return (alpha / 180) * Math.PI
-}
+const toRad = (alpha: number) => (alpha / 180) * Math.PI
