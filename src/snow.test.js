@@ -78,3 +78,16 @@ test("limits catch-up work after a long frame", () => {
   frame(3_600_000)
   expect(context.arc).toHaveBeenCalledTimes(5)
 })
+
+test("keeps a flake's direction and speed between frames", () => {
+  const { snow, context, frame } = setupAnimation()
+  snow.meanAngle = 30
+  frame(20)
+
+  snow.flow = 0
+  context.arc.mockClear()
+  frame(40)
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0][0]).toBeCloseTo(48.5)
+  expect(context.arc.mock.calls[0][1]).toBeCloseTo(-5 + 1.5 * Math.sqrt(3))
+})

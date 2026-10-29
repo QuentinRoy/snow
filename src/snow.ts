@@ -201,7 +201,8 @@ class SnowFlake {
   y: number
   color: string
   speed: number
-  angle: number
+  velocityX: number
+  velocityY: number
   size: number
 
   constructor(x: number, y: number, color: string, speed: number, angle: number, size: number) {
@@ -209,13 +210,14 @@ class SnowFlake {
     this.y = y
     this.color = color
     this.speed = speed
-    this.angle = angle
+    this.velocityX = Math.cos(angle) * speed
+    this.velocityY = -Math.sin(angle) * speed
     this.size = size
   }
 
   tick(this: SnowFlake, deltaTime: number) {
-    this.x += Math.cos(this.angle) * this.speed * deltaTime
-    this.y -= Math.sin(this.angle) * this.speed * deltaTime
+    this.x += this.velocityX * deltaTime
+    this.y += this.velocityY * deltaTime
 
     return this
   }
