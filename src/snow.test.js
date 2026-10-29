@@ -53,7 +53,7 @@ test("starts, stops, and resumes the animation", () => {
   vi.stubGlobal("requestAnimationFrame", requestFrame)
   vi.stubGlobal("cancelAnimationFrame", cancelFrame)
 
-  const snow = Snow({})
+  const snow = Snow({ getContext: vi.fn().mockReturnValue({}) })
   expect(requestFrame).toHaveBeenCalledTimes(1)
 
   snow.stop()
@@ -138,4 +138,21 @@ test("constructor options override defaults, including zero and false", () => {
   const snow = Snow(canvas, options)
   expect(snow).toMatchObject(options)
   expect(Snow(canvas, { flow: 0 }).meanSize).toBe(10)
+})
+
+test("reuses the context across frames and canvas resizes", () => {
+  const { snow, context, canvas, frame } = setupAnimation()
+  frame(20)
+  canvas.width = 200
+  canvas.height = 150
+  frame(40)
+  snow.draw()
+  expect(canvas.getContext).toHaveBeenCalledExactlyOnceWith("2d")
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 200, 150)
+})
+
+test("rejects a canvas without a 2D context", () => {
+  const { canvas } = setupAnimation()
+  canvas.getContext.mockReturnValue(null)
+  expect(() => Snow(canvas)).toThrow("Could not fetch canvas' context.")
 })

@@ -59,6 +59,12 @@ const defaultsProps: Required<SnowOptions> = {
 }
 
 export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): SnowAnimation {
+  const context = canvas.getContext("2d")
+
+  if (context === null) {
+    throw new Error(`Could not fetch canvas' context.`)
+  }
+
   // Used by the loop.
   const snowFlakes: SnowFlake[] = []
   let animationFrameRequest: number | null = null
@@ -136,11 +142,6 @@ export default function Snow(canvas: HTMLCanvasElement, opts?: SnowOptions): Sno
 
   const draw = (): void => {
     const { width, height } = canvas
-    const context = canvas.getContext("2d")
-
-    if (context === null) {
-      throw new Error(`Could not fetch canvas' context.`)
-    }
 
     context.save()
 
