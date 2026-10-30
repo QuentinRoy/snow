@@ -1,5 +1,5 @@
-import type { SnowSettings } from "./snow"
-import { randomNormal, toRadians } from "./math"
+import type { SnowSettings } from "./snow.ts"
+import { randomNormal, toRadians } from "./math.ts"
 
 /** A circular snowflake with a position, appearance, and velocity. */
 export class SnowFlake {

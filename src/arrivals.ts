@@ -1,6 +1,6 @@
-import type { CanvasSize, SnowSettings } from "./snow"
-import { SnowFlake } from "./snow-flake"
-import { randomExponential, randomNormal } from "./math"
+import type { CanvasSize, SnowSettings } from "./snow.ts"
+import { SnowFlake } from "./snow-flake.ts"
+import { randomExponential, randomNormal } from "./math.ts"
 
 /** An entering flake and its elapsed time at frame end. */
 interface Arrival {
