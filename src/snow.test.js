@@ -204,6 +204,34 @@ function setupAnimation(
   }
 }
 
+/**
+ * A deterministic random source, so statistical tests do not flake.
+ * @param {number} seed Starting state.
+ */
+function seededRandom(seed) {
+  let state = seed
+
+  return () => {
+    state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296
+
+    return state / 4_294_967_296
+  }
+}
+
+/**
+ * Record the fill color of every flake drawn from now on.
+ * @param {ReturnType<typeof setupAnimation>["context"]} context Fake context.
+ */
+function recordFillColors(context) {
+  /** @type {string[]} */
+  const colors = []
+  context.fill.mockImplementation(() => {
+    colors.push(context.fillStyle)
+  })
+
+  return colors
+}
+
 test("fills immediately at the configured density and scales with area", () => {
   const { context, resize } = setupAnimation()
   expect(context.arc).toHaveBeenCalledTimes(1)
@@ -740,11 +768,7 @@ test.each([
   const { context, frame, redraw, snow } = setupAnimation({ density: 400 })
   snow.density = density
   snow.flakeColor = "blue"
-  /** @type {string[]} */
-  const colors = []
-  context.fill.mockImplementation(() => {
-    colors.push(context.fillStyle)
-  })
+  const colors = recordFillColors(context)
   redraw()
   expect(context.arc).toHaveBeenCalledTimes(4)
 
@@ -762,11 +786,7 @@ test.each([
 
 test("draws old and incoming colors separately during a transition", () => {
   const { context, frame, snow } = setupAnimation()
-  /** @type {string[]} */
-  const colors = []
-  context.fill.mockImplementation(() => {
-    colors.push(context.fillStyle)
-  })
+  const colors = recordFillColors(context)
   snow.flakeColor = "blue"
   snow.density = 200
   frame(100)
@@ -819,11 +839,7 @@ test("preserves survivor drawing order and appends independent new arrivals", ()
   })
 
   vi.spyOn(Math, "random").mockReturnValue(0.5)
-  /** @type {string[]} */
-  const colors = []
-  context.fill.mockImplementation(() => {
-    colors.push(context.fillStyle)
-  })
+  const colors = recordFillColors(context)
   snow.flakeColor = "blue"
   frame(100)
   colors.length = 0
@@ -837,11 +853,7 @@ test("keeps arrivals going at the lower density while old dense snow leaves", ()
   resize(1000, 1000)
   snow.density = 10
   snow.flakeColor = "blue"
-  /** @type {string[]} */
-  const colors = []
-  context.fill.mockImplementation(() => {
-    colors.push(context.fillStyle)
-  })
+  const colors = recordFillColors(context)
 
   for (let time = 100; time <= 500; time += 100) {
     colors.length = 0
@@ -880,15 +892,9 @@ test.each([
 ])(
   "preserves the visible speed distribution with mean $flakeSpeed",
   ({ flakeSpeed, populationMin, populationMax, speedMin, speedMax, arrivalMin }) => {
-    let seed = 1729
-
     const { context, frame, resize } = setupAnimation(
       { density: 200, fillMode: "none", flakeSpeed, flakeSpeedDeviation: 100 },
-      () => {
-        seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
-
-        return seed / 4_294_967_296
-      },
+      seededRandom(1729),
     )
 
     resize(1000, 1000)
@@ -956,8 +962,6 @@ test.each([
 ])(
   "maintains average density at $angle degrees with size $size",
   ({ angle, flakeDirectionDeviation, size, width, height }) => {
-    let seed = 937
-
     const { context, frame, resize } = setupAnimation(
       {
         density: 200,
@@ -966,11 +970,7 @@ test.each([
         flakeDirectionDeviation,
         flakeSize: size,
       },
-      () => {
-        seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
-
-        return seed / 4_294_967_296
-      },
+      seededRandom(937),
     )
 
     resize(width, height)
@@ -1013,13 +1013,10 @@ test("does not wrap or restart flakes after density reaches zero", () => {
  * @param {number} frameStep Frame duration in milliseconds.
  */
 function simulateArrivalFrames(frameStep) {
-  let seed = 574
-
-  const { context, frame } = setupAnimation({ density: 10_000, fillMode: "none" }, () => {
-    seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
-
-    return seed / 4_294_967_296
-  })
+  const { context, frame } = setupAnimation(
+    { density: 10_000, fillMode: "none" },
+    seededRandom(574),
+  )
 
   for (let time = frameStep; time <= 2000; time += frameStep) {
     frame(time)
@@ -1044,13 +1041,10 @@ test("prefills the same spatial distribution as incoming flakes", () => {
   let populationSum = 0
 
   for (let run = 1; run <= 100; run += 1) {
-    let seed = run * 17_497
-
-    const { container, context, frame, snow } = setupAnimation({ density: 0 }, () => {
-      seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
-
-      return seed / 4_294_967_296
-    })
+    const { container, context, frame, snow } = setupAnimation(
+      { density: 0 },
+      seededRandom(run * 17_497),
+    )
 
     snow.paused = true
     container.clientWidth = 1000
