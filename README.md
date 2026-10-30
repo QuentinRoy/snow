@@ -69,19 +69,19 @@ All options become mutable properties on the returned animation. Sizes and speed
 | `color`      | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                              |
 | `meanSpeed`  | `150`                     | Average flake speed, in pixels per second.                                                       |
 | `sdSpeed`    | `10`                      | Standard deviation of flake speeds, in pixels per second.                                        |
-| `density`    | `30`                      | Number of snowflakes per 1,000 × 1,000 CSS-pixel area.                                           |
+| `density`    | `30`                      | Target number of snowflakes per 1,000 × 1,000 CSS-pixel area.                                    |
 | `autoFill`   | `true`                    | Immediately fill the canvas at startup and newly exposed areas after resizing.                   |
 | `meanAngle`  | `0`                       | Average direction, in degrees from vertically downward: 90 is left, 180 is up, and -90 is right. |
 | `sdAngle`    | `5`                       | Standard deviation of flake directions, in degrees.                                              |
 | `isFpsShown` | `false`                   | Show the frame rate on the canvas.                                                               |
 
-The population scales with displayed area: `density: 30` gives 30 flakes on a 1,000 × 1,000 canvas and 120 on a 2,000 × 2,000 canvas. Target counts are rounded to the nearest whole flake. Density must be finite and nonnegative; `0` clears the snow.
+The population scales with displayed area: `density: 30` gives 30 flakes on a 1,000 × 1,000 canvas and 120 on a 2,000 × 2,000 canvas. Target counts are rounded to the nearest whole flake. Density must be finite and nonnegative. Increasing it lets additional flakes enter through the edges; decreasing it retires excess flakes as they leave. Setting it to `0` stops replacing flakes and lets the snow leave naturally.
 
-Flakes wrap around to the opposite side after leaving the canvas, keeping their size, speed, and direction. Changing speed or direction does not change the population. Size, speed, and direction are sampled from normal distributions. Negative sizes and speeds are clamped to zero: zero-size flakes are invisible, and zero-speed flakes stay still.
+Flakes recycle after leaving the canvas. While settings stay unchanged, each flake keeps its size, speed, direction, and color. Updated settings apply when a flake next enters, so visible flakes do not suddenly change. Size, speed, and direction are sampled from normal distributions. Negative sizes and speeds are clamped to zero: zero-size flakes are invisible, and zero-speed flakes stay still.
 
 With `autoFill: true`, flakes cover the canvas before the first frame. Resizing preserves flakes in the overlapping area, removes flakes outside the new bounds, and fills newly exposed areas at the configured density. This also handles a canvas becoming wider and shorter at the same time. Shrinking can leave more flakes than the target count; excess flakes are removed as they leave the canvas, so visible flakes do not disappear to meet an exact count.
 
-With `autoFill: false`, the canvas starts empty and snow enters through the incoming edges. Newly exposed areas after resizing fill through motion too. Slower flakes take longer to enter; stationary flakes remain hidden until `autoFill` is enabled.
+With `autoFill: false`, the canvas starts empty and snow enters through the incoming edges. Newly exposed areas after resizing fill through motion too. Slower flakes take longer to enter; stationary flakes remain hidden because they never cross an edge. Toggling `autoFill` affects future resize areas and does not reveal flakes already waiting to enter.
 
 This replaces the previous `flow` option. There is no fixed conversion: `flow` controlled arrivals, so its visible population depended on canvas dimensions, speed, and direction. Use `density` to choose the amount of snow directly.
 
@@ -100,7 +100,7 @@ animation.stop()
 animation.resume()
 ```
 
-Changes take effect on the next frame or call to `draw()`. Size, speed, and direction changes resample the corresponding attribute for existing flakes without resetting their positions. Increasing density adds flakes; decreasing it removes flakes at random. New flakes appear immediately when `autoFill` is enabled and enter through the edges otherwise. Enabling `autoFill` also reveals any flakes waiting to enter. Disabling it keeps flakes that are already visible.
+Size, speed, direction, and color changes apply to incoming flakes. Visible flakes keep their attributes until they leave. Density changes also settle through arrivals and departures, regardless of `autoFill`; changing a parameter never fills or clears the visible scene immediately. Stationary flakes stay where they are, including when density is set to `0`. The frame-rate display changes on the next draw.
 
 `animation.draw()` applies option and layout changes, then redraws without advancing time. While stopped, call it after resizing to update coverage. You usually do not need to call it yourself. Call `animation.stop()` before removing the canvas to stop scheduling frames. To also erase the paused frame, clear the canvas yourself:
 

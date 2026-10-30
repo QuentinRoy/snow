@@ -6,8 +6,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** @param {Parameters<typeof createSnow>[1]} options Initial settings. */
-const setupAnimation = (options = {}) => {
+/**
+ * @param {Parameters<typeof createSnow>[1]} [options] Initial settings.
+ * @param {() => number} [random] Random source.
+ */
+const setupAnimation = (options, random) => {
   /** @type {FrameRequestCallback | undefined} */
   let nextFrame
 
@@ -23,7 +26,11 @@ const setupAnimation = (options = {}) => {
   vi.stubGlobal("requestAnimationFrame", requestFrame)
   vi.stubGlobal("cancelAnimationFrame", cancelFrame)
   const now = vi.spyOn(Date, "now").mockReturnValue(0)
-  vi.spyOn(Math, "random").mockReturnValue(0.5)
+  const randomMock = vi.spyOn(Math, "random").mockReturnValue(0.5)
+
+  if (random) {
+    randomMock.mockImplementation(random)
+  }
 
   const context = {
     arc: vi.fn(),
@@ -160,25 +167,38 @@ test("lets snow enter new space naturally after resizing when autoFill is disabl
   expect(context.arc).toHaveBeenCalledTimes(2)
 })
 
-test("applies size, speed, direction, and color changes to existing flakes", () => {
+test("keeps visible attributes and applies new settings only when a flake reenters", () => {
   const { context, frame, snow } = setupAnimation()
   snow.meanSize = 20
   snow.meanSpeed = 200
   snow.meanAngle = -90
   snow.color = "blue"
+  context.arc.mockClear()
+  snow.draw()
+  expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
+  expect(context.fillStyle).toBe("rgba(255,255,255,0.9)")
+
   frame(100)
-  expect(context.arc.mock.calls[0][0]).toBeCloseTo(70)
+  expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 60, 5])
+
+  for (let time = 200; time <= 600; time += 100) {
+    frame(time)
+  }
+
+  expect(context.arc.mock.calls[0][0]).toBeCloseTo(0)
   expect(context.arc.mock.calls[0][1]).toBeCloseTo(50)
   expect(context.arc.mock.calls[0][2]).toBe(10)
   expect(context.fillStyle).toBe("blue")
 })
 
-test("fills pending flakes when autoFill is enabled without moving them", () => {
-  const { context, snow } = setupAnimation({ autoFill: false, meanSpeed: 0 })
+test("enabling autoFill only fills newly exposed space", () => {
+  const { context, resize, snow } = setupAnimation({ autoFill: false, meanSpeed: 0 })
   snow.autoFill = true
   snow.draw()
+  expect(context.arc).not.toHaveBeenCalled()
+  resize(200, 100)
   expect(context.arc).toHaveBeenCalledTimes(1)
-  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([150, 50])
 })
 
 test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
@@ -190,12 +210,15 @@ test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
   },
 )
 
-test("keeps negative sampled speeds stationary and skips nonpositive sizes", () => {
-  const { context, frame, snow } = setupAnimation({ meanSpeed: -100 })
+test("keeps negative sampled speeds stationary", () => {
+  const { context, frame } = setupAnimation({ meanSpeed: -100 })
   frame(100)
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
-  snow.meanSize = -10
-  frame(200)
+})
+
+test("skips nonpositive sampled sizes", () => {
+  const { context, frame } = setupAnimation({ meanSize: -10 })
+  frame(100)
   expect(context.arc).not.toHaveBeenCalled()
 })
 
@@ -245,30 +268,25 @@ test("redraws paused flakes without moving them and reuses the context after res
   expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 200, 100)
 })
 
-test("adjusts the population when density changes and rounds fractional counts", () => {
-  const { context, snow } = setupAnimation()
-  snow.density = 350
-  context.arc.mockClear()
-  snow.draw()
-  expect(context.arc).toHaveBeenCalledTimes(4)
-  snow.density = 150
-  context.arc.mockClear()
-  snow.draw()
-  expect(context.arc).toHaveBeenCalledTimes(2)
-  snow.density = 0
-  context.arc.mockClear()
-  snow.draw()
-  expect(context.arc).not.toHaveBeenCalled()
+test.each([
+  { count: 4, density: 350 },
+  { count: 2, density: 150 },
+  { count: 0, density: 0 },
+])("rounds the initial density $density to $count flakes", ({ count, density }) => {
+  const { context } = setupAnimation({ density })
+  expect(context.arc).toHaveBeenCalledTimes(count)
 })
 
-test("removes flakes outside a shrunken canvas and fills the remaining area", () => {
-  const { context, resize } = setupAnimation({ density: 400 })
+test("removes flakes outside a shrunken canvas and lets replacements enter naturally", () => {
+  const { context, frame, resize } = setupAnimation({ density: 400 })
   resize(40, 100)
+  expect(context.arc).not.toHaveBeenCalled()
+
+  for (let time = 100; time <= 600; time += 100) {
+    frame(time)
+  }
+
   expect(context.arc).toHaveBeenCalledTimes(2)
-  expect(context.arc.mock.calls).toEqual([
-    [20, 50, 5, 0, 2 * Math.PI],
-    [20, 50, 5, 0, 2 * Math.PI],
-  ])
   resize(0, 0)
   expect(context.arc).not.toHaveBeenCalled()
   resize(100, 100)
@@ -341,3 +359,106 @@ test.each([
     expect(context.arc.mock.calls[0][1]).toBeCloseTo(y)
   },
 )
+
+test("increases density through incoming flakes without filling the visible scene", () => {
+  const { context, frame, snow } = setupAnimation()
+  snow.density = 400
+  context.arc.mockClear()
+  snow.draw()
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
+
+  for (let time = 100; time <= 500; time += 100) {
+    frame(time)
+    expect(context.arc).toHaveBeenCalledTimes(1)
+  }
+
+  frame(600)
+  expect(context.arc).toHaveBeenCalledTimes(4)
+})
+
+test.each([
+  { density: 100, remaining: 1 },
+  { density: 0, remaining: 0 },
+])("reduces density to $density only as flakes leave", ({ density, remaining }) => {
+  const { context, frame, snow } = setupAnimation({ density: 400 })
+  snow.density = density
+  context.arc.mockClear()
+  snow.draw()
+  expect(context.arc).toHaveBeenCalledTimes(4)
+
+  for (let time = 100; time <= 500; time += 100) {
+    frame(time)
+    expect(context.arc).toHaveBeenCalledTimes(4)
+  }
+
+  frame(600)
+  expect(context.arc).toHaveBeenCalledTimes(remaining)
+})
+
+test("draws old and incoming colors separately during a transition", () => {
+  const { context, frame, snow } = setupAnimation()
+  /** @type {string[]} */
+  const colors = []
+  context.fill.mockImplementation(() => {
+    colors.push(context.fillStyle)
+  })
+  vi.spyOn(Math, "random").mockReturnValue(0.9)
+  snow.color = "blue"
+  snow.density = 200
+  frame(100)
+  colors.length = 0
+  frame(200)
+  expect(context.arc).toHaveBeenCalledTimes(2)
+  expect(colors).toHaveLength(2)
+  expect(colors).toContain("rgba(255,255,255,0.9)")
+  expect(colors).toContain("blue")
+})
+
+test("updates flakes that are still waiting to enter without revealing them", () => {
+  const { context, frame, snow } = setupAnimation({ autoFill: false, meanSpeed: 0 })
+  snow.meanSpeed = 100
+
+  for (let time = 100; time <= 500; time += 100) {
+    frame(time)
+    expect(context.arc).not.toHaveBeenCalled()
+  }
+
+  frame(600)
+  expect(context.arc).toHaveBeenCalledTimes(1)
+})
+
+test("cancels pending arrivals naturally when a density increase is reversed", () => {
+  const { context, frame, snow } = setupAnimation()
+  snow.density = 1000
+  snow.draw()
+  snow.density = 100
+
+  for (let time = 100; time <= 1000; time += 100) {
+    frame(time)
+    expect(context.arc).toHaveBeenCalledTimes(1)
+  }
+})
+
+test("keeps overlapping flakes in one color batch when an intervening flake changes color", () => {
+  const samples = [0.5, 0.5, 0.5, 0.5, 0.1, 0.99, 0.5, 0.5, 0.5]
+  let sampleIndex = 0
+
+  const { context, frame, snow } = setupAnimation({ density: 300 }, () => {
+    const value = samples[sampleIndex % samples.length]
+    sampleIndex += 1
+
+    return value
+  })
+
+  /** @type {string[]} */
+  const colors = []
+  context.fill.mockImplementation(() => {
+    colors.push(context.fillStyle)
+  })
+  snow.color = "blue"
+  frame(100)
+  expect(context.arc.mock.calls.filter(([x, y]) => x === 50 && y === 60)).toHaveLength(2)
+  expect(colors.filter((color) => color === "rgba(255,255,255,0.9)")).toHaveLength(1)
+  expect(colors.filter((color) => color === "blue")).toHaveLength(1)
+})
