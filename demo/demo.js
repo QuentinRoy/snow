@@ -2,27 +2,10 @@ import { snow } from "./snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 
-function resizeCanvas() {
-  const width = window.innerWidth
-  const height = window.innerHeight
-  // Set the layout size in CSS pixels and scale the bitmap for sharp rendering.
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
-  canvas.width = Math.round(width * window.devicePixelRatio)
-  canvas.height = Math.round(height * window.devicePixelRatio)
-}
-
-resizeCanvas()
-
 /** @type {import("../src/snow").SnowAnimation} */
 const animation = snow(canvas)
 
 window.snow = animation
-
-window.addEventListener("resize", () => {
-  resizeCanvas()
-  animation.draw()
-})
 
 const controls = document.querySelector("#controls")
 const closeButton = controls.querySelector(".close-button")
