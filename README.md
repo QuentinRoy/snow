@@ -77,7 +77,7 @@ All options become mutable properties on the returned animation. Sizes and speed
 
 The population scales with displayed area: `density: 30` gives 30 flakes on a 1,000 × 1,000 canvas and 120 on a 2,000 × 2,000 canvas. Target counts are rounded to the nearest whole flake. Density must be finite and nonnegative. Increasing it lets additional flakes enter through the edges; decreasing it retires excess flakes as they leave. Setting it to `0` stops replacing flakes and lets the snow leave naturally.
 
-Flakes recycle after leaving the canvas. While settings stay unchanged, each flake keeps its size, speed, direction, and color. Updated settings apply when a flake next enters, so visible flakes do not suddenly change. Size, speed, and direction are sampled from normal distributions. Negative sizes and speeds are clamped to zero: zero-size flakes are invisible, and zero-speed flakes stay still.
+Size, speed, and direction are sampled from normal distributions. Negative sizes and speeds are clamped to zero: zero-size flakes are invisible, and zero-speed flakes stay still.
 
 With `autoFill: true`, flakes cover the canvas before the first frame. Resizing preserves flakes in the overlapping area, removes flakes outside the new bounds, and fills newly exposed areas at the configured density. This also handles a canvas becoming wider and shorter at the same time. Shrinking can leave more flakes than the target count; excess flakes are removed as they leave the canvas, so visible flakes do not disappear to meet an exact count.
 
