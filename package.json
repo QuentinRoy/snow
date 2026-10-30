@@ -40,7 +40,7 @@
     "lint": "vp lint",
     "fmt": "vp fmt",
     "test": "vp test --project core",
-    "test:types": "tsc -p test/types/tsconfig.json",
+    "test:types": "vp test --project types",
     "test:browser": "vp test --project element"
   },
   "devDependencies": {

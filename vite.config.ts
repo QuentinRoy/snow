@@ -57,6 +57,18 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "types",
+          typecheck: {
+            enabled: true,
+            include: ["test/types/**/*.test-d.ts"],
+            only: true,
+            tsconfig: "test/types/tsconfig.json",
+          },
+        },
+      },
+      {
+        extends: true,
+        test: {
           browser: {
             enabled: true,
             headless: true,

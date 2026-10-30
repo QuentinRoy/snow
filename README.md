@@ -270,6 +270,7 @@ The demo loads the built library from `dist/`. The build watcher rebuilds it whe
 | `vp fmt`            | Format the repository's files.                                              |
 | `pnpm test`         | Run the core tests once, in Node.                                           |
 | `pnpm test:browser` | Run the element tests once, in Chromium.                                    |
+| `pnpm test:types`   | Check the built declarations with Vitest type tests; run after `vp pack`.   |
 | `vp pack`           | Build the library and TypeScript declarations in `dist/`, with source maps. |
 
 Before submitting a change, run:
@@ -278,5 +279,6 @@ Before submitting a change, run:
 pnpm test
 pnpm test:browser
 vp pack
+pnpm test:types
 vp check
 ```
