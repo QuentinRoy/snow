@@ -150,10 +150,6 @@ export class SnowElement extends SnowElementBase {
   #animation: SnowAnimation | undefined
   #setDimensions: ReturnType<typeof adoptStyles>
 
-  readonly #onReducedMotionChange = (): void => {
-    this.#syncPlayback()
-  }
-
   constructor() {
     super()
     this.#root.append(this.#surface)
@@ -167,13 +163,13 @@ export class SnowElement extends SnowElementBase {
   connectedCallback(): void {
     this.#setDimensions = adoptStyles(this.#root)
     this.#setDimensions?.(this.width, this.height)
-    this.#reducedMotion.addEventListener("change", this.#onReducedMotionChange)
+    this.#reducedMotion.addEventListener("change", this.#syncPlayback)
     this.#animation ??= snow(this.#surface, { ...this.#readOptions(), paused: true })
     this.#syncPlayback()
   }
 
   disconnectedCallback(): void {
-    this.#reducedMotion.removeEventListener("change", this.#onReducedMotionChange)
+    this.#reducedMotion.removeEventListener("change", this.#syncPlayback)
     this.#syncPlayback()
   }
 
@@ -192,7 +188,7 @@ export class SnowElement extends SnowElementBase {
   }
 
   /** The element's own `paused` only mirrors the attribute, so the core gets the effective value. */
-  #syncPlayback(): void {
+  readonly #syncPlayback = (): void => {
     if (this.#animation !== undefined) {
       this.#animation.paused =
         !this.isConnected ||
