@@ -20,8 +20,15 @@ afterEach(() => {
  * @param {number} [pixelRatio] Stubbed `devicePixelRatio`.
  * @param {boolean} [rejectBoxOption] Make `observe` throw when given a `box` option, as browsers
  * without device-pixel boxes do.
+ * @param {typeof createSnow} [factory] Factory to test.
  */
-function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false) {
+function setupAnimation(
+  options,
+  random,
+  pixelRatio = 1,
+  rejectBoxOption = false,
+  factory = createSnow,
+) {
   vi.stubGlobal("devicePixelRatio", pixelRatio)
 
   /** @type {FakeResizeObserver[]} */
@@ -87,7 +94,7 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
     width: 100,
   }
 
-  const snow = createSnow(canvas, {
+  const snow = factory(canvas, {
     density: 100,
     flakeDirectionDeviation: 0,
     flakeSize: 10,
@@ -994,12 +1001,48 @@ test("disposes through Symbol.dispose", () => {
   expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
 })
 
-test("creates an animation where the runtime has no Symbol.dispose", () => {
-  // `Symbol.dispose` is read-only, so shadow it on an object that inherits everything else.
-  vi.stubGlobal("Symbol", Object.create(Symbol, { dispose: { value: undefined } }))
+test("initializes a missing disposal symbol and disposes through it", async () => {
+  const nativeSymbol = Symbol
+  /** @param {string} description Symbol description. */
+  const symbolWithoutDispose = (description) => nativeSymbol(description)
+  Object.setPrototypeOf(symbolWithoutDispose, nativeSymbol)
+  Object.defineProperty(symbolWithoutDispose, "dispose", { value: undefined, writable: true })
+  vi.stubGlobal("Symbol", symbolWithoutDispose)
+  vi.resetModules()
 
-  const { snow } = setupAnimation()
-  expect(() => {
-    snow.dispose()
-  }).not.toThrow()
+  const { snow: factory } = await import("./snow")
+  expect(Symbol.dispose.description).toBe("Symbol.dispose")
+
+  const { cancelFrame, context, observers, snow } = setupAnimation(
+    undefined,
+    undefined,
+    1,
+    false,
+    factory,
+  )
+
+  snow[Symbol.dispose]()
+  snow.dispose()
+  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+})
+
+test("preserves an existing disposal symbol when imported without a DOM", async () => {
+  const nativeSymbol = Symbol
+  const existing = nativeSymbol("existing disposal")
+  /** @param {string} description Symbol description. */
+  const symbolWithDispose = (description) => nativeSymbol(description)
+  Object.setPrototypeOf(symbolWithDispose, nativeSymbol)
+  Object.defineProperty(symbolWithDispose, "dispose", { value: existing, writable: true })
+  vi.stubGlobal("Symbol", symbolWithDispose)
+  vi.stubGlobal("document", undefined)
+  vi.resetModules()
+
+  const { snow: factory } = await import("./snow")
+  expect(Symbol.dispose).toBe(existing)
+  const { cancelFrame, observers, snow } = setupAnimation(undefined, undefined, 1, false, factory)
+  snow[Symbol.dispose]()
+  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
 })

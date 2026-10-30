@@ -2,6 +2,10 @@ import { createArrivals } from "./arrivals"
 import { defaultSettings } from "./defaults"
 import { SnowFlake } from "./snow-flake"
 
+if (Symbol.dispose === undefined || Symbol.dispose === null) {
+  Reflect.set(Symbol, "dispose", Symbol("Symbol.dispose"))
+}
+
 /** How empty space gets filled. */
 export type FillMode = "instant" | "none"
 
@@ -48,7 +52,7 @@ export interface SnowAnimation extends SnowSettings {
    */
   dispose: () => void
   /** Same as `dispose()`, so `using animation = snow(canvas)` disposes at the end of the scope. */
-  [Symbol.dispose]?: () => void
+  [Symbol.dispose]: () => void
 }
 
 /** Settings that override the defaults at startup. */
@@ -320,6 +324,17 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     }
   })
 
+  const dispose = (): void => {
+    if (isDisposed) {
+      return
+    }
+
+    isDisposed = true
+    resizeObserver.disconnect()
+    stopFrames()
+    context.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
   const animation: SnowAnimation = {
     ...defaultSettings,
     ...options,
@@ -339,22 +354,8 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
         startFrames()
       }
     },
-    dispose: () => {
-      if (isDisposed) {
-        return
-      }
-
-      isDisposed = true
-      resizeObserver.disconnect()
-      stopFrames()
-
-      context.clearRect(0, 0, canvas.width, canvas.height)
-    },
-  }
-
-  // `Symbol.dispose` is missing from some runtimes, and the build targets ES2020.
-  if ("dispose" in Symbol) {
-    animation[Symbol.dispose] = animation.dispose
+    dispose,
+    [Symbol.dispose]: dispose,
   }
 
   resize(canvas.clientWidth, canvas.clientHeight)

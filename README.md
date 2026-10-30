@@ -228,7 +228,7 @@ Call `dispose()` when you no longer need the animation, for example before remov
 animation.dispose()
 ```
 
-Where the runtime supports explicit resource management, declare the animation with `using` and it disposes itself when the scope ends. `[Symbol.dispose]` does the same as `dispose()`. Runtimes without `Symbol.dispose` skip it and still work with `dispose()`.
+Declare the animation with `using` and it disposes itself when the scope ends. `[Symbol.dispose]` does the same as `dispose()`. When `Symbol.dispose` is missing, importing Snow initializes it globally. This does not add support for `using` syntax: your runtime must support it, or your application must compile it.
 
 ```js
 {
