@@ -15,7 +15,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
     overrides: [
       {
-        files: ["src/snow.ts"],
+        files: ["src/**/*.ts"],
         rules: {
           "no-use-before-define": "off",
           "sort-keys": "off",
