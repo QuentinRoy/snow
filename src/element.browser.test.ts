@@ -388,6 +388,20 @@ test("converts double assignments like a native meter", () => {
   }
 })
 
+test("reads floating-point prefixes like a native meter", () => {
+  const element = mount()
+  const meter = document.createElement("meter")
+  meter.min = -1000
+  meter.max = 1000
+
+  for (const value of ["  -1.5e2px", "0x10", "1e+", "+1", "-0", ".25em"]) {
+    element.setAttribute("flake-direction", value)
+    meter.setAttribute("low", value)
+    expect(element.flakeDirection, value).toBe(meter.low)
+    expect(element.getAttribute("flake-direction")).toBe(meter.getAttribute("low"))
+  }
+})
+
 test("restores the default when an attribute is removed", () => {
   const element = mount()
 
@@ -469,6 +483,59 @@ test("reflects strings and canonicalizes fill mode without changing markup", () 
 
   element.removeAttribute("flake-color")
   expect(element.flakeColor).toBe("")
+})
+
+test("converts color assignments like a native DOMString property", () => {
+  const element = mount()
+  const div = document.createElement("div")
+
+  for (const value of [null, undefined, 42, { toString: () => "snow" }, Symbol("test")]) {
+    let snowError: unknown
+    let divError: unknown
+
+    try {
+      Reflect.set(element, "flakeColor", value)
+    } catch (error) {
+      snowError = error
+    }
+
+    try {
+      Reflect.set(div, "title", value)
+    } catch (error) {
+      divError = error
+    }
+
+    expect(snowError instanceof TypeError).toBe(divError instanceof TypeError)
+    expect(element.flakeColor).toBe(div.title)
+    expect(element.getAttribute("flake-color")).toBe(div.getAttribute("title"))
+  }
+})
+
+test("canonicalizes fill mode like a native enumerated property", () => {
+  const element = mount()
+  const video = document.createElement("video")
+
+  // Snow's instant state corresponds to video's auto state; both use it as the invalid default.
+  for (const [snowValue, videoValue] of [
+    ["NoNe", "NoNe"],
+    ["INSTANT", "AUTO"],
+    [" none ", " none "],
+    ["", ""],
+    ["unknown", "unknown"],
+  ]) {
+    element.setAttribute("fill-mode", snowValue)
+    video.setAttribute("preload", videoValue)
+    expect(element.fillMode).toBe(video.preload === "none" ? "none" : "instant")
+    expect(element.getAttribute("fill-mode")).toBe(snowValue)
+    expect(video.getAttribute("preload")).toBe(videoValue)
+  }
+
+  for (const value of ["NoNe", "unknown", null, undefined]) {
+    Reflect.set(element, "fillMode", value)
+    Reflect.set(video, "preload", value)
+    expect(element.fillMode).toBe(video.preload === "none" ? "none" : "instant")
+    expect(element.getAttribute("fill-mode")).toBe(video.getAttribute("preload"))
+  }
 })
 
 test("reflects boolean attributes by presence and property truthiness", () => {
