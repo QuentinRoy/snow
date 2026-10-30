@@ -14,7 +14,7 @@
   },
   "files": [
     "dist/**/*",
-    "src/snow.ts"
+    "src/**/*.ts"
   ],
   "type": "module",
   "main": "dist/snow.js",

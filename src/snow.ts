@@ -1,47 +1,65 @@
+import { createArrivals } from "./arrivals"
+import { SnowFlake } from "./snow-flake"
+
+/** Controls and mutable settings for a snow animation. */
 interface SnowAnimation {
-  /**
-   * Stop the animation.
-   */
+  /** Pause while keeping the current frame visible. */
   stop: () => void
 
-  /**
-   * Resume the animation if it was stopped.
-   */
+  /** Continue from the paused positions. */
   resume: () => void
 
-  /** Defines the average size of the snow flakes. */
+  /** Average flake diameter in CSS pixels. */
   meanSize: number
-  /** Defines the standard deviation from the mean of snow flakes' size. */
+  /** Standard deviation of flake diameters in CSS pixels. */
   sdSize: number
-  /** Defines the color of the snow flakes. */
+  /** Flake color as a CSS color string. */
   color: string
-  /** Defines the average speed of the snow flakes. */
+  /** Mean of the visible speed distribution in CSS pixels per second. */
   meanSpeed: number
-  /** Defines the standard deviation from the mean of snow flakes' speed. */
+  /** Standard deviation of speeds in CSS pixels per second. */
   sdSpeed: number
-  /** Controls the creation rate per second and per pixel of canvas width. */
-  flow: number
+  /** Average number of snowflakes per 1,000 by 1,000 CSS-pixel area. */
+  density: number
+  /** Fill the canvas at startup and newly exposed areas after resizing. */
+  autoFill: boolean
   /**
-   * Defines the average direction in degrees from vertically downward.
-   * Flakes enter from the edges they move inward through.
+   * Average direction in degrees from vertically downward.
+   * 90 is left, 180 is up, and -90 is right.
    */
   meanAngle: number
-  /** Defines the standard deviation from the mean of snow flakes' angle. */
+  /** Standard deviation of directions in degrees. */
   sdAngle: number
-  /** Display the number of frames per seconds. */
+  /** Show the frame rate. */
   isFpsShown: boolean
 
   /**
-   * Redraw the snow flakes (but don't update their position).
+   * Apply settings and layout changes, then redraw without advancing time.
    *
    * @remarks You don't usually need to call this method directly.
    */
   draw: () => void
 }
 
-type SnowOptions = Partial<Omit<SnowAnimation, "draw" | "stop" | "resume">>
+/** Current appearance, motion, and density settings. */
+export type SnowSettings = Omit<SnowAnimation, "draw" | "stop" | "resume">
 
-const defaultOptions: Required<SnowOptions> = {
+/** Settings that override the defaults at startup. */
+type SnowOptions = Partial<SnowSettings>
+
+/** Canvas dimensions in CSS pixels. */
+export interface CanvasSize {
+  width: number
+  height: number
+}
+
+/** Resized canvas and the region shared with its previous size. */
+interface ExposedArea extends CanvasSize {
+  overlapWidth: number
+  overlapHeight: number
+}
+
+const defaultOptions: SnowSettings = {
   meanSize: 10,
   sdSize: 2,
   meanSpeed: 150,
@@ -49,10 +67,28 @@ const defaultOptions: Required<SnowOptions> = {
   meanAngle: 0,
   sdAngle: 5,
   color: "rgba(255,255,255,0.9)",
-  flow: 0.01,
+  density: 30,
+  autoFill: true,
   isFpsShown: false,
 }
 
+const numericSettingKeys = [
+  "meanSize",
+  "sdSize",
+  "meanSpeed",
+  "sdSpeed",
+  "meanAngle",
+  "sdAngle",
+] as const
+
+/**
+ * Animate snow at a target visible density, with geometry measured in CSS pixels.
+ *
+ * @remarks
+ * Autofill seeds the canvas at startup and on growth. Later flakes enter through
+ * the edges. Existing flakes keep their settings, so changes take effect as new
+ * flakes arrive.
+ */
 export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
   const context = canvas.getContext("2d")
 
@@ -60,109 +96,181 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     throw new Error(`Could not fetch canvas' context.`)
   }
 
-  // Used by the loop.
   const snowFlakes: SnowFlake[] = []
   let animationFrameId: number | null = null
   let lastFrameTime = Date.now()
-  // Remember the decimal part of the number of snow flakes to
-  // create each tick, so it can be added back on the next tick.
-  let fractionalFlakeCount = 0
+  let width = 0
+  let height = 0
+  const arrivals = createArrivals()
 
-  // Keep recent frame durations for the FPS counter.
   const frameDurations: number[] = []
   const maxFrameDurations = 50
   let nextFrameDurationIndex = 0
 
+  /** Advance and render one animation frame. */
   const loop = (): void => {
     const now = Date.now()
+    // Avoid large position jumps after a delayed frame.
     const deltaTime = Math.min((now - lastFrameTime) / 1000, 0.1)
 
-    tick(deltaTime)
+    synchronize()
+    advanceFlakes(deltaTime)
 
     lastFrameTime = now
 
-    // Register FPS information.
     frameDurations[nextFrameDurationIndex] = deltaTime
     nextFrameDurationIndex = (nextFrameDurationIndex + 1) % maxFrameDurations
 
-    animation.draw()
+    render()
     animationFrameId = requestAnimationFrame(loop)
   }
 
-  const tick = (deltaTime: number): void => {
-    let survivingFlakeCount = 0
+  /** Move flakes, remove departures, and admit arrivals. */
+  const advanceFlakes = (deltaTime: number): void => {
+    // Compact in place to preserve drawing order without allocating another array.
+    let survivingCount = 0
 
     for (const snowFlake of snowFlakes) {
       snowFlake.tick(deltaTime)
 
-      if (snowFlake.isInRectangle(0, 0, canvas.width, canvas.height)) {
-        snowFlakes[survivingFlakeCount] = snowFlake
-        survivingFlakeCount += 1
+      if (snowFlake.isInRectangle(width, height)) {
+        snowFlakes[survivingCount] = snowFlake
+        survivingCount += 1
       }
     }
 
-    snowFlakes.length = survivingFlakeCount
+    snowFlakes.length = survivingCount
+    arrivals.advance({
+      deltaTime,
+      settings: animation,
+      bounds: { width, height },
+      onArrival: ({ flake, age }) => {
+        flake.tick(age)
 
-    // Create the new snow flakes.
-    let newFlakeCount =
-      Math.random() * animation.flow * deltaTime * canvas.width + fractionalFlakeCount
+        if (flake.isInRectangle(width, height)) {
+          snowFlakes.push(flake)
+        }
+      },
+    })
+  }
 
-    fractionalFlakeCount = newFlakeCount - Math.floor(newFlakeCount)
-    newFlakeCount = Math.floor(newFlakeCount)
+  /** Populate newly exposed space with uniformly positioned flakes. */
+  const fillExposedArea = (
+    count: number,
+    { width: nextWidth, height: nextHeight, overlapWidth, overlapHeight }: ExposedArea,
+  ): void => {
+    for (let i = 0; i < count; i += 1) {
+      const snowFlake = new SnowFlake(animation)
+      const radius = snowFlake.size / 2
 
-    for (let i = 0; i < newFlakeCount; i += 1) {
-      const snowFlake = SnowFlake.newRandom(
-        animation.meanSize,
-        animation.sdSize,
-        animation.meanSpeed,
-        animation.sdSpeed,
-        animation.meanAngle,
-        animation.sdAngle,
-        animation.color,
-        canvas.width,
-        canvas.height,
-      )
+      // Include partly visible circles to match the coverage of incoming flakes.
+      if (overlapWidth === 0 || overlapHeight === 0) {
+        snowFlake.x = Math.random() * (nextWidth + snowFlake.size) - radius
+        snowFlake.y = Math.random() * (nextHeight + snowFlake.size) - radius
+      } else {
+        // Split the exposed region into nonoverlapping strips; weight by area for even coverage.
+        const rightArea = (nextWidth - overlapWidth) * (nextHeight + snowFlake.size)
+        const bottomArea = (overlapWidth + snowFlake.size) * (nextHeight - overlapHeight)
 
-      // Spread out the snow flakes in the elapsed window of time.
-      snowFlake.tick(Math.random() * deltaTime)
-
-      if (
-        snowFlake.size > 0 &&
-        snowFlake.speed > 0 &&
-        snowFlake.isInRectangle(0, 0, canvas.width, canvas.height)
-      ) {
-        snowFlakes.push(snowFlake)
+        if (Math.random() * (rightArea + bottomArea) < rightArea) {
+          snowFlake.x = overlapWidth + radius + Math.random() * (nextWidth - overlapWidth)
+          snowFlake.y = Math.random() * (nextHeight + snowFlake.size) - radius
+        } else {
+          snowFlake.x = Math.random() * (overlapWidth + snowFlake.size) - radius
+          snowFlake.y = overlapHeight + radius + Math.random() * (nextHeight - overlapHeight)
+        }
       }
+
+      snowFlakes.push(snowFlake)
     }
   }
 
-  const draw = (): void => {
-    const { width, height } = canvas
+  /** Validate settings and apply resizing without advancing time. */
+  const synchronize = (): void => {
+    if (!Number.isFinite(animation.density) || animation.density < 0) {
+      throw new RangeError("density must be a finite, nonnegative number")
+    }
 
+    for (const key of numericSettingKeys) {
+      if (!Number.isFinite(animation[key])) {
+        throw new RangeError(`${key} must be a finite number`)
+      }
+    }
+
+    const nextWidth = canvas.clientWidth
+    const nextHeight = canvas.clientHeight
+
+    const overlapWidth = Math.min(width, nextWidth)
+    const overlapHeight = Math.min(height, nextHeight)
+    const count = Math.round((animation.density * nextWidth * nextHeight) / 1_000_000)
+
+    if (!Number.isSafeInteger(count)) {
+      throw new RangeError("density produces too many snowflakes")
+    }
+
+    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
+
+    if (nextWidth === width && nextHeight === height) {
+      return
+    }
+
+    // Preserve the shared region; only newly exposed space needs immediate filling.
+    const exposedCount = animation.autoFill ? count - overlapCount : 0
+    let survivingCount = 0
+
+    for (const snowFlake of snowFlakes) {
+      if (nextWidth > 0 && nextHeight > 0 && snowFlake.isInRectangle(overlapWidth, overlapHeight)) {
+        snowFlakes[survivingCount] = snowFlake
+        survivingCount += 1
+      }
+    }
+
+    snowFlakes.length = survivingCount
+
+    fillExposedArea(exposedCount, {
+      width: nextWidth,
+      height: nextHeight,
+      overlapWidth,
+      overlapHeight,
+    })
+
+    width = nextWidth
+    height = nextHeight
+  }
+
+  /** Draw the current scene without advancing time. */
+  const render = (): void => {
     context.save()
+    // Keep positions and density in CSS pixels even when the canvas bitmap has more pixels.
+    context.setTransform(
+      width > 0 ? canvas.width / width : 1,
+      0,
+      0,
+      height > 0 ? canvas.height / height : 1,
+      0,
+      0,
+    )
 
-    // Draw the snow flakes.
     context.clearRect(0, 0, width, height)
 
-    const flakeCount = snowFlakes.length
+    let currentColor: string | undefined
 
-    if (flakeCount > 0) {
-      // A single fill colors the whole path, so keep the last flake's color.
-      context.fillStyle = snowFlakes[flakeCount - 1].color
+    for (const snowFlake of snowFlakes) {
+      if (snowFlake.size <= 0) {
+        continue
+      }
+
+      if (currentColor !== snowFlake.color) {
+        context.fillStyle = snowFlake.color
+        currentColor = snowFlake.color
+      }
+
+      // Separate fills preserve overlap opacity and drawing order, including mixed colors.
+      context.beginPath()
+      context.arc(snowFlake.x, snowFlake.y, snowFlake.size / 2, 0, 2 * Math.PI)
+      context.fill()
     }
 
-    context.beginPath()
-
-    for (let i = 0; i < flakeCount; i += 1) {
-      const snowFlake = snowFlakes[i]
-      const { x, y } = snowFlake
-      context.moveTo(x, y)
-      context.arc(x, y, snowFlake.size / 2, 0, 2 * Math.PI)
-    }
-
-    context.fill()
-
-    // Show the FPS counter.
     if (animation.isFpsShown) {
       const averageFrameDuration =
         frameDurations.length > 0
@@ -171,10 +279,16 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
       context.font = "20px sans-serif"
       context.fillStyle = "red"
-      context.fillText(`${Math.round(1 / averageFrameDuration)} FPS`, 10, 30)
+      const fps = averageFrameDuration > 0 ? Math.round(1 / averageFrameDuration) : 0
+      context.fillText(`${fps} FPS`, 10, 30)
     }
 
     context.restore()
+  }
+
+  const draw = (): void => {
+    synchronize()
+    render()
   }
 
   const stop = (): SnowAnimation => {
@@ -195,106 +309,16 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     return animation
   }
 
-  const animation: SnowAnimation = { ...defaultOptions, ...options, draw, stop, resume }
+  const animation: SnowAnimation = {
+    ...defaultOptions,
+    ...options,
+    draw,
+    stop,
+    resume,
+  }
 
+  animation.draw()
   resume()
 
   return animation
 }
-
-class SnowFlake {
-  x: number
-  y: number
-  color: string
-  speed: number
-  velocityX: number
-  velocityY: number
-  size: number
-
-  constructor(x: number, y: number, color: string, speed: number, angle: number, size: number) {
-    this.x = x
-    this.y = y
-    this.color = color
-    this.speed = speed
-    this.velocityX = Math.cos(angle) * speed
-    this.velocityY = -Math.sin(angle) * speed
-    this.size = size
-  }
-
-  tick(this: SnowFlake, deltaTime: number) {
-    this.x += this.velocityX * deltaTime
-    this.y += this.velocityY * deltaTime
-
-    return this
-  }
-
-  static newRandom(
-    meanSize: number,
-    sdSize: number,
-    meanSpeed: number,
-    sdSpeed: number,
-    meanAngle: number,
-    sdAngle: number,
-    color: string,
-    canvasWidth: number,
-    canvasHeight: number,
-  ): SnowFlake {
-    const size = randomNormal(meanSize, sdSize)
-
-    const snowFlake = new SnowFlake(
-      0,
-      0,
-      color,
-      randomNormal(meanSpeed, sdSpeed),
-      randomNormal(
-        // Convert the API angle to trigonometric angle.
-        toRadians(270 - meanAngle),
-        toRadians(sdAngle),
-      ),
-      size,
-    )
-
-    // Use the removal bounds and weight edges by inward motion to keep coverage even.
-    const width = canvasWidth + size
-    const height = canvasHeight + size
-    const horizontalEdgeWeight = width * Math.abs(snowFlake.velocityY)
-    const verticalEdgeWeight = height * Math.abs(snowFlake.velocityX)
-
-    if (Math.random() * (horizontalEdgeWeight + verticalEdgeWeight) < horizontalEdgeWeight) {
-      snowFlake.x = Math.random() * width - size / 2
-      snowFlake.y = snowFlake.velocityY > 0 ? -size / 2 : canvasHeight + size / 2
-    } else {
-      snowFlake.x = snowFlake.velocityX > 0 ? -size / 2 : canvasWidth + size / 2
-      snowFlake.y = Math.random() * height - size / 2
-    }
-
-    return snowFlake
-  }
-
-  isInRectangle(x: number, y: number, width: number, height: number) {
-    return (
-      this.y <= y + height + this.size / 2 &&
-      this.y >= y - this.size / 2 &&
-      this.x <= x + width + this.size / 2 &&
-      this.x >= x - this.size / 2
-    )
-  }
-}
-
-const randomNormal = (mean = 0, sd = 1) => {
-  let u = 0
-  let v = 0
-
-  // Avoid zero because its logarithm is undefined.
-  while (u === 0) {
-    u = Math.random()
-  }
-
-  while (v === 0) {
-    v = Math.random()
-  }
-
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * Math.abs(sd) + mean
-}
-
-const toRadians = (degrees: number) => (degrees / 180) * Math.PI

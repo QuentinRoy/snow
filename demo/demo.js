@@ -2,29 +2,42 @@ import snow from "./snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 
-canvas.width = window.innerWidth
+function resizeCanvas() {
+  const width = window.innerWidth
+  const height = window.innerHeight
+  // Set the layout size in CSS pixels and scale the bitmap for sharp rendering.
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  canvas.width = Math.round(width * window.devicePixelRatio)
+  canvas.height = Math.round(height * window.devicePixelRatio)
+}
 
-canvas.height = window.innerHeight
+resizeCanvas()
+
+/** @type {ReturnType<typeof import("../src/snow").default>} */
+const animation = snow(canvas)
+
+window.snow = animation
 
 window.addEventListener("resize", () => {
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
+  resizeCanvas()
+  animation.draw()
 })
-
-window.snow = snow(canvas)
 
 const controls = document.querySelector("#controls")
 const closeButton = controls.querySelector(".close-button")
 
-const closeControls = () => {
+function closeControls() {
   controls.classList.add("hidden")
 }
 
-const openControls = () => {
+function openControls() {
   controls.classList.remove("hidden")
 }
 
-const areControlsHidden = () => controls.classList.contains("hidden")
+function areControlsHidden() {
+  return controls.classList.contains("hidden")
+}
 
 closeButton.addEventListener("click", () => {
   if (areControlsHidden()) {
@@ -42,9 +55,7 @@ controls.addEventListener(
       event.stopPropagation()
     }
   },
-  // Make sure the control divs get the event *before* the open button.
-  // Otherwise, after the button opens the controls, the controls div would
-  // received this event and close it.
+  // Capture first so opening the controls does not immediately close them.
   { capture: true },
 )
 
@@ -58,6 +69,7 @@ for (const input of document.querySelectorAll("#controls > .control > input")) {
       break
     }
 
+    case "autoFill":
     case "isFpsShown": {
       input.checked = window.snow[input.id]
       input.addEventListener("change", () => {

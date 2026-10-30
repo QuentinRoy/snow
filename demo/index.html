@@ -40,8 +40,12 @@
         <input type="number" min="0" step="5" max="180" id="sdAngle" />
       </div>
       <div class="control">
-        <label for="flow">flow</label>
-        <input type="number" min="0" step="0.01" id="flow" />
+        <label for="density" title="Snowflakes per 1,000 × 1,000 CSS pixels">density</label>
+        <input type="number" min="0" step="1" id="density" />
+      </div>
+      <div class="control">
+        <input type="checkbox" id="autoFill" />
+        <label for="autoFill">auto fill</label>
       </div>
       <div class="control">
         <input type="checkbox" id="isFpsShown" />
