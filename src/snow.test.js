@@ -39,7 +39,6 @@ const setupAnimation = (options, random) => {
     fill: vi.fn(),
     fillStyle: "",
     fillText: vi.fn(),
-    moveTo: vi.fn(),
     restore: vi.fn(),
     save: vi.fn(),
     setTransform: vi.fn(),
@@ -440,7 +439,7 @@ test("cancels pending arrivals naturally when a density increase is reversed", (
   }
 })
 
-test("keeps overlapping flakes in one color batch when an intervening flake changes color", () => {
+test("preserves flake drawing order when an intervening flake changes color", () => {
   const samples = [0.5, 0.5, 0.5, 0.5, 0.1, 0.99, 0.5, 0.5, 0.5]
   let sampleIndex = 0
 
@@ -459,6 +458,5 @@ test("keeps overlapping flakes in one color batch when an intervening flake chan
   snow.color = "blue"
   frame(100)
   expect(context.arc.mock.calls.filter(([x, y]) => x === 50 && y === 60)).toHaveLength(2)
-  expect(colors.filter((color) => color === "rgba(255,255,255,0.9)")).toHaveLength(1)
-  expect(colors.filter((color) => color === "blue")).toHaveLength(1)
+  expect(colors).toEqual(["rgba(255,255,255,0.9)", "blue", "rgba(255,255,255,0.9)"])
 })

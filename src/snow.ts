@@ -231,35 +231,20 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
     context.clearRect(0, 0, width, height)
 
-    const colorBatches = new Map<string, SnowFlake[]>()
+    let currentColor: string | undefined
 
     for (const snowFlake of snowFlakes) {
       if (!snowFlake.isVisible || snowFlake.size <= 0) {
         continue
       }
 
-      const batch = colorBatches.get(snowFlake.color)
-
-      if (batch) {
-        batch.push(snowFlake)
-      } else {
-        colorBatches.set(snowFlake.color, [snowFlake])
+      if (currentColor !== snowFlake.color) {
+        context.fillStyle = snowFlake.color
+        currentColor = snowFlake.color
       }
-    }
 
-    // Stable color groups keep overlap opacity unchanged as flakes enter and leave.
-    // oxlint-disable-next-line unicorn/no-array-sort -- Sort a fresh array to support ES2020 browsers.
-    const batches = [...colorBatches].sort(([left], [right]) => left.localeCompare(right))
-
-    for (const [color, flakes] of batches) {
-      context.fillStyle = color
       context.beginPath()
-
-      for (const { x, y, size } of flakes) {
-        context.moveTo(x, y)
-        context.arc(x, y, size / 2, 0, 2 * Math.PI)
-      }
-
+      context.arc(snowFlake.x, snowFlake.y, snowFlake.size / 2, 0, 2 * Math.PI)
       context.fill()
     }
 
