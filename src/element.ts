@@ -1,8 +1,8 @@
 import { WithAttributeProps, boolean } from "@quentinroy/custom-element-mixins"
 import type { AttributeSerializer } from "@quentinroy/custom-element-mixins"
 import { defaultSettings } from "./defaults"
-import { snow } from "./snow"
-import type { SnowAnimation, SnowOptions } from "./snow"
+import { snow } from "./snow.js"
+import type { SnowAnimation, SnowOptions } from "./snow.js"
 
 const defaultWidth = 300
 const defaultHeight = 150

@@ -44,6 +44,9 @@ export default defineConfig({
       "element/register": "src/element-register.ts",
       snow: "src/snow.ts",
     },
+    hash: false,
+    // Preserve imports between public entries instead of generating facade modules.
+    inputOptions: { external: ["./snow.js", "./element.js"] },
     platform: "browser",
     sourcemap: true,
     target: "es2020",

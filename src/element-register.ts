@@ -1,3 +1,3 @@
-import { SnowElement } from "./element"
+import { SnowElement } from "./element.js"
 
 customElements.define("snow-fall", SnowElement)
