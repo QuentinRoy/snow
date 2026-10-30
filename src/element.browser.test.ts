@@ -557,6 +557,8 @@ test("animates until paused and again after resuming", () => {
 
 test("does not move flakes for the time spent paused", () => {
   const drawing = stubDrawing()
+  // A centered flake can't leave the canvas during the test.
+  vi.spyOn(Math, "random").mockReturnValue(0.5)
 
   const element = mount({
     ...bigSnow,
@@ -638,6 +640,8 @@ test("stops animating when removed from the page", () => {
 
 test("resumes from the same flakes when put back, without simulating the time away", async () => {
   const drawing = stubDrawing()
+  // Centered flakes can't leave within the test, so the flake count only changes through arrivals.
+  vi.spyOn(Math, "random").mockReturnValue(0.5)
 
   const element = mount({
     ...bigSnow,
@@ -646,6 +650,9 @@ test("resumes from the same flakes when put back, without simulating the time aw
     "flake-speed": "200",
     "flake-speed-deviation": "0",
   })
+
+  // Stop random edge arrivals; the initial fill stays on screen.
+  element.density = 0
 
   const before = drawing.lastFrame().arcs
 
