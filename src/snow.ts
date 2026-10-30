@@ -98,7 +98,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
   const snowFlakes: SnowFlake[] = []
   let animationFrameId: number | null = null
-  let lastFrameTime = Date.now()
+  let lastFrameTime = performance.now()
   let width = 0
   let height = 0
   const arrivals = createArrivals()
@@ -108,10 +108,9 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   let nextFrameDurationIndex = 0
 
   /** Advance and render one animation frame. */
-  const loop = (): void => {
-    const now = Date.now()
-    // Avoid large position jumps after a delayed frame.
-    const deltaTime = Math.min((now - lastFrameTime) / 1000, 0.1)
+  const loop = (now: DOMHighResTimeStamp): void => {
+    // The frame timestamp can precede the resume time; also avoid large jumps after a delayed frame.
+    const deltaTime = Math.min(Math.max(0, (now - lastFrameTime) / 1000), 0.1)
 
     synchronize()
     advanceFlakes(deltaTime)
@@ -302,7 +301,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
   const resume = (): SnowAnimation => {
     if (animationFrameId === null) {
-      lastFrameTime = Date.now()
+      lastFrameTime = performance.now()
       animationFrameId = requestAnimationFrame(loop)
     }
 

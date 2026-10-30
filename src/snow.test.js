@@ -26,7 +26,7 @@ function setupAnimation(options, random) {
   const cancelFrame = vi.fn()
   vi.stubGlobal("requestAnimationFrame", requestFrame)
   vi.stubGlobal("cancelAnimationFrame", cancelFrame)
-  const now = vi.spyOn(Date, "now").mockReturnValue(0)
+  const now = vi.spyOn(performance, "now").mockReturnValue(0)
   const randomMock = vi.spyOn(Math, "random").mockReturnValue(0.5)
 
   if (random) {
@@ -66,8 +66,7 @@ function setupAnimation(options, random) {
   /** @param {number} time Frame time in milliseconds. */
   const frame = (time) => {
     context.arc.mockClear()
-    now.mockReturnValue(time)
-    nextFrame?.(0)
+    nextFrame?.(time)
   }
 
   /** @param {number} width Displayed width. @param {number} height Displayed height. */
