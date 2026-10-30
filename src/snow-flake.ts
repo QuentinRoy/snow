@@ -11,15 +11,21 @@ export class SnowFlake {
   velocityY: number
 
   constructor(options: SnowSettings, speed?: number) {
-    this.color = options.color
-    this.size = Math.max(0, randomNormal(options.meanSize, options.sdSize))
+    this.color = options.flakeColor
+    this.size = Math.max(0, randomNormal(options.flakeSize, options.flakeSizeDeviation))
 
-    const flakeSpeed = Math.max(0, speed ?? randomNormal(options.meanSpeed, options.sdSpeed))
+    const nonNegativeSpeed = Math.max(
+      0,
+      speed ?? randomNormal(options.flakeSpeed, options.flakeSpeedDeviation),
+    )
 
-    const angle = randomNormal(toRadians(270 - options.meanAngle), toRadians(options.sdAngle))
+    const angle = randomNormal(
+      toRadians(270 - options.flakeDirection),
+      toRadians(options.flakeDirectionDeviation),
+    )
 
-    this.velocityX = Math.cos(angle) * flakeSpeed
-    this.velocityY = -Math.sin(angle) * flakeSpeed
+    this.velocityX = Math.cos(angle) * nonNegativeSpeed
+    this.velocityY = -Math.sin(angle) * nonNegativeSpeed
   }
 
   /** Advance the position by the given time in seconds. */
