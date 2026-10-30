@@ -29,7 +29,25 @@ function setupAnimation(
   rejectBoxOption = false,
   factory = createSnow,
 ) {
+  vi.stubGlobal("getComputedStyle", () => ({ writingMode: "horizontal-tb" }))
   vi.stubGlobal("devicePixelRatio", pixelRatio)
+  /** @type {Array<{ listener: (() => void) | undefined }>} */
+  const queries = []
+  vi.stubGlobal("matchMedia", () => {
+    /** @type {{ listener: (() => void) | undefined }} */
+    const query = { listener: undefined }
+    queries.unshift(query)
+
+    return {
+      /** @param {string} _type Event type. @param {() => void} listener Event listener. */
+      addEventListener: (_type, listener) => {
+        query.listener = listener
+      },
+      removeEventListener: () => {
+        query.listener = undefined
+      },
+    }
+  })
 
   /** @type {FakeResizeObserver[]} */
   const observers = []
@@ -134,7 +152,19 @@ function setupAnimation(
     resize(size.width, size.height)
   }
 
-  return { cancelFrame, canvas, context, frame, now, observers, redraw, requestFrame, resize, snow }
+  return {
+    cancelFrame,
+    canvas,
+    context,
+    frame,
+    now,
+    observers,
+    queries,
+    redraw,
+    requestFrame,
+    resize,
+    snow,
+  }
 }
 
 /**
@@ -227,6 +257,77 @@ test("watches the default box where the browser rejects device pixels", () => {
 
   resize(150, 80)
   expect([canvas.width, canvas.height]).toEqual([300, 160])
+})
+
+test("updates pixel density while paused without moving flakes", () => {
+  const { canvas, context, frame, queries, requestFrame, snow } = setupAnimation(
+    {},
+    undefined,
+    1,
+    true,
+  )
+
+  frame(20)
+  snow.paused = true
+  const requests = requestFrame.mock.calls.length
+  context.arc.mockClear()
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
+  expect(requestFrame).toHaveBeenCalledTimes(requests)
+})
+
+test("tracks successive pixel-density changes while playing", () => {
+  const { canvas, context, frame, queries } = setupAnimation({}, undefined, 1, true)
+  frame(20)
+  context.arc.mockClear()
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
+  vi.stubGlobal("devicePixelRatio", 3)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([300, 300])
+  frame(40)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 54])
+})
+
+test("stops pixel-density updates on disposal, including queued notifications", () => {
+  const { canvas, context, queries, snow } = setupAnimation({ paused: true }, undefined, 1, true)
+  const queuedNotification = queries[0]?.listener
+  snow.dispose()
+  expect(queries[0]?.listener).toBeUndefined()
+  context.arc.mockClear()
+  vi.stubGlobal("devicePixelRatio", 2)
+  queuedNotification?.()
+  expect([canvas.width, canvas.height]).toEqual([100, 100])
+  expect(context.arc).not.toHaveBeenCalled()
+})
+
+test("preserves a detached scene across a pixel-density change", () => {
+  const { canvas, context, frame, queries, resize, snow } = setupAnimation({}, undefined, 1, true)
+  frame(20)
+  snow.paused = true
+  canvas.isConnected = false
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([100, 100])
+  canvas.isConnected = true
+  resize(100, 100)
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
+})
+
+test("watches density when device-pixel observations are silently unavailable", () => {
+  const { canvas, queries, resize } = setupAnimation({ paused: true })
+  resize(100, 100)
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
 })
 
 test("redraws after a resize without advancing time", () => {

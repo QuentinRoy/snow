@@ -150,7 +150,7 @@ const animation = snow(canvas, { flakeColor: "white", density: 30, fillMode: "in
 
 The options argument is optional. Call `snow(canvas)` to use the defaults.
 
-Snow watches the canvas and sets `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio`, so the drawing stays sharp on high-resolution screens. Don't set them yourself; size the canvas with CSS only. After every resize Snow redraws the frame, even while the animation is paused. Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills the new area at once; with `"none"`, the new area stays empty until flakes drift in. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation.
+Snow watches the canvas and sets `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio`, so the drawing stays sharp on high-resolution screens, including in vertical writing modes. Snow also updates the bitmap when pixel density changes, including while paused. In browsers without device-pixel resize observation, it watches the screen resolution for changes. Don't set them yourself; size the canvas with CSS only. After every resize Snow redraws the frame, even while the animation is paused. Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills the new area at once; with `"none"`, the new area stays empty until flakes drift in. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation.
 
 ### Without a bundler
 

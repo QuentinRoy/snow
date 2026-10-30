@@ -244,8 +244,16 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     devicePixelSize?: ResizeObserverSize,
   ): void => {
     validateSettings()
-    canvas.width = devicePixelSize?.inlineSize ?? Math.round(cssWidth * devicePixelRatio)
-    canvas.height = devicePixelSize?.blockSize ?? Math.round(cssHeight * devicePixelRatio)
+
+    const vertical =
+      devicePixelSize !== undefined && getComputedStyle(canvas).writingMode !== "horizontal-tb"
+
+    canvas.width =
+      (vertical ? devicePixelSize?.blockSize : devicePixelSize?.inlineSize) ??
+      Math.round(cssWidth * devicePixelRatio)
+    canvas.height =
+      (vertical ? devicePixelSize?.inlineSize : devicePixelSize?.blockSize) ??
+      Math.round(cssHeight * devicePixelRatio)
     applyLayout(cssWidth, cssHeight)
     render()
   }
@@ -313,6 +321,26 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     }
   }
 
+  let pixelRatioQuery: MediaQueryList | undefined
+
+  const watchPixelRatio = (): void => {
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
+    pixelRatioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
+    pixelRatioQuery.addEventListener("change", onPixelRatioChange)
+  }
+
+  const onPixelRatioChange = (): void => {
+    if (isDisposed) {
+      return
+    }
+
+    watchPixelRatio()
+
+    if (canvas.isConnected) {
+      resize(width, height)
+    }
+  }
+
   const resizeObserver = new ResizeObserver((entries) => {
     // A canvas off the page reports an empty size, which would drop every flake.
     if (isDisposed || !canvas.isConnected) {
@@ -320,6 +348,10 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     }
 
     for (const { contentRect, devicePixelContentBoxSize } of entries) {
+      if (devicePixelContentBoxSize?.[0] === undefined && pixelRatioQuery === undefined) {
+        watchPixelRatio()
+      }
+
       resize(contentRect.width, contentRect.height, devicePixelContentBoxSize?.[0])
     }
   })
@@ -331,6 +363,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
 
     isDisposed = true
     resizeObserver.disconnect()
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
     stopFrames()
     context.clearRect(0, 0, canvas.width, canvas.height)
   }
@@ -367,6 +400,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   } catch {
     // Browsers without device-pixel boxes reject the option.
     resizeObserver.observe(canvas)
+    watchPixelRatio()
   }
 
   if (!isPaused) {

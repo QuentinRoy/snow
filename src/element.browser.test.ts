@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from "vite-plus/test"
 import { cdp } from "vite-plus/test/browser"
 import { SnowElement } from "./element"
+import { snow } from "./snow"
 
 customElements.define("test-snow", SnowElement)
 
@@ -180,6 +181,31 @@ test("sizes the canvas bitmap from the displayed size", async () => {
   await expect
     .poll(() => canvas && [canvas.width, canvas.height])
     .toEqual([200 * devicePixelRatio, 50 * devicePixelRatio])
+})
+
+test("keeps physical bitmap dimensions in vertical writing modes", async () => {
+  const element = mount({ height: "50", width: "200", paused: "" }, "writing-mode: vertical-rl")
+  const elementCanvas = element.shadowRoot?.querySelector("canvas")
+  const canvas = document.createElement("canvas")
+  canvas.style.cssText = "width: 200px; height: 50px; writing-mode: vertical-lr"
+  document.body.append(canvas)
+  const animation = snow(canvas, { paused: true })
+
+  let observed = false
+
+  const observer = new ResizeObserver(() => {
+    observed = true
+  })
+
+  observer.observe(canvas)
+  await expect.poll(() => observed).toBe(true)
+  observer.disconnect()
+  expect(elementCanvas && [elementCanvas.width, elementCanvas.height]).toEqual([
+    200 * devicePixelRatio,
+    50 * devicePixelRatio,
+  ])
+  expect([canvas.width, canvas.height]).toEqual([200 * devicePixelRatio, 50 * devicePixelRatio])
+  animation.dispose()
 })
 
 const defaults = {
