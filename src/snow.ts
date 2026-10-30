@@ -48,7 +48,7 @@ interface CanvasSize {
 
 type FlakeArea = CanvasSize & { x?: number; y?: number; isVisible?: boolean }
 
-const defaultOptions: Required<SnowOptions> = {
+const defaultOptions: SnowSettings = {
   meanSize: 10,
   sdSize: 2,
   meanSpeed: 150,
@@ -97,7 +97,18 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     const deltaTime = Math.min((now - lastFrameTime) / 1000, 0.1)
 
     synchronize()
+    advanceFlakes(deltaTime)
 
+    lastFrameTime = now
+
+    frameDurations[nextFrameDurationIndex] = deltaTime
+    nextFrameDurationIndex = (nextFrameDurationIndex + 1) % maxFrameDurations
+
+    render()
+    animationFrameId = requestAnimationFrame(loop)
+  }
+
+  const advanceFlakes = (deltaTime: number): void => {
     let flakesToRetire = Math.max(0, snowFlakes.length - targetFlakeCount)
     let survivingCount = 0
     const bounds = { width, height }
@@ -122,13 +133,6 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     }
 
     snowFlakes.length = survivingCount
-    lastFrameTime = now
-
-    frameDurations[nextFrameDurationIndex] = deltaTime
-    nextFrameDurationIndex = (nextFrameDurationIndex + 1) % maxFrameDurations
-
-    render()
-    animationFrameId = requestAnimationFrame(loop)
   }
 
   const addFlakes = (
@@ -144,22 +148,30 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     }
   }
 
+  const updateFlakeSettings = (): void => {
+    if (!flakeSettingKeys.some((key) => animation[key] !== flakeSettings[key])) {
+      return
+    }
+
+    flakeSettings = { ...animation }
+
+    for (const snowFlake of snowFlakes) {
+      if (snowFlake.isVisible) {
+        continue
+      }
+
+      snowFlake.update(flakeSettings)
+      snowFlake.x = Math.random() * width
+      snowFlake.y = Math.random() * height
+    }
+  }
+
   const synchronize = (): void => {
     if (!Number.isFinite(animation.density) || animation.density < 0) {
       throw new RangeError("density must be a finite, nonnegative number")
     }
 
-    if (flakeSettingKeys.some((key) => animation[key] !== flakeSettings[key])) {
-      flakeSettings = { ...animation }
-
-      for (const snowFlake of snowFlakes) {
-        if (!snowFlake.isVisible) {
-          snowFlake.update(flakeSettings)
-          snowFlake.x = Math.random() * width
-          snowFlake.y = Math.random() * height
-        }
-      }
-    }
+    updateFlakeSettings()
 
     const nextWidth = canvas.clientWidth
     const nextHeight = canvas.clientHeight
@@ -299,15 +311,13 @@ class SnowFlake {
   y = 0
   size = 0
   speed = 0
-  angle = 0
   velocityX = 0
   velocityY = 0
-  isVisible: boolean
+  isVisible = false
   color = ""
   settings: SnowSettings
 
   constructor(options: SnowSettings) {
-    this.isVisible = options.autoFill
     this.settings = options
     this.update(options)
   }
@@ -317,9 +327,9 @@ class SnowFlake {
     this.color = options.color
     this.size = Math.max(0, randomNormal(options.meanSize, options.sdSize))
     this.speed = Math.max(0, randomNormal(options.meanSpeed, options.sdSpeed))
-    this.angle = randomNormal(toRadians(270 - options.meanAngle), toRadians(options.sdAngle))
-    this.velocityX = Math.cos(this.angle) * this.speed
-    this.velocityY = -Math.sin(this.angle) * this.speed
+    const angle = randomNormal(toRadians(270 - options.meanAngle), toRadians(options.sdAngle))
+    this.velocityX = Math.cos(angle) * this.speed
+    this.velocityY = -Math.sin(angle) * this.speed
   }
 
   enter({ width, height }: CanvasSize): void {
