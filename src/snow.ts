@@ -1,6 +1,7 @@
-import createArrivals from "./arrivals"
-import SnowFlake from "./snowflake"
+import { createArrivals } from "./arrivals"
+import { SnowFlake } from "./snow-flake"
 
+/** Controls and mutable settings for a snow animation. */
 interface SnowAnimation {
   /** Pause while keeping the current frame visible. */
   stop: () => void
@@ -40,15 +41,19 @@ interface SnowAnimation {
   draw: () => void
 }
 
+/** Current appearance, motion, and density settings. */
 export type SnowSettings = Omit<SnowAnimation, "draw" | "stop" | "resume">
 
+/** Settings that override the defaults at startup. */
 type SnowOptions = Partial<SnowSettings>
 
+/** Canvas dimensions in CSS pixels. */
 export interface CanvasSize {
   width: number
   height: number
 }
 
+/** Resized canvas and the region shared with its previous size. */
 interface ExposedArea extends CanvasSize {
   overlapWidth: number
   overlapHeight: number
@@ -80,11 +85,9 @@ const numericSettingKeys = [
  * Animate snow at a target visible density, with geometry measured in CSS pixels.
  *
  * @remarks
- * Auto-fill seeds the population at startup and on growth. Afterward, flakes arrive
- * independently through incoming edges. Faster flakes need more arrivals because
- * they spend less time on screen; the speed sampler and crossing-rate
- * check correct for this. Existing flakes keep their settings, so changes spread
- * through new arrivals.
+ * Autofill seeds the canvas at startup and on growth. Later flakes enter through
+ * the edges. Existing flakes keep their settings, so changes take effect as new
+ * flakes arrive.
  */
 export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
   const context = canvas.getContext("2d")
@@ -100,14 +103,14 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   let height = 0
   const arrivals = createArrivals()
 
-  // Keep recent frame durations for the FPS counter.
   const frameDurations: number[] = []
   const maxFrameDurations = 50
   let nextFrameDurationIndex = 0
 
-  /** Advance and render one frame, limiting jumps after a delayed callback. */
+  /** Advance and render one animation frame. */
   const loop = (): void => {
     const now = Date.now()
+    // Avoid large position jumps after a delayed frame.
     const deltaTime = Math.min((now - lastFrameTime) / 1000, 0.1)
 
     synchronize()
@@ -122,8 +125,9 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     animationFrameId = requestAnimationFrame(loop)
   }
 
-  /** Compact survivors in place to preserve drawing order without allocating a new array. */
+  /** Move flakes, remove departures, and admit arrivals. */
   const advanceFlakes = (deltaTime: number): void => {
+    // Compact in place to preserve drawing order without allocating another array.
     let survivingCount = 0
 
     for (const snowFlake of snowFlakes) {
@@ -150,7 +154,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     })
   }
 
-  /** Seed exposed space uniformly, allowing circles to extend past the canvas edges. */
+  /** Populate newly exposed space with uniformly positioned flakes. */
   const fillExposedArea = (
     count: number,
     { width: nextWidth, height: nextHeight, overlapWidth, overlapHeight }: ExposedArea,
@@ -159,6 +163,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
       const snowFlake = new SnowFlake(animation)
       const radius = snowFlake.size / 2
 
+      // Include partly visible circles to match the coverage of incoming flakes.
       if (overlapWidth === 0 || overlapHeight === 0) {
         snowFlake.x = Math.random() * (nextWidth + snowFlake.size) - radius
         snowFlake.y = Math.random() * (nextHeight + snowFlake.size) - radius
@@ -180,7 +185,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     }
   }
 
-  /** Validate settings and reconcile layout without advancing time, even while paused. */
+  /** Validate settings and apply resizing without advancing time. */
   const synchronize = (): void => {
     if (!Number.isFinite(animation.density) || animation.density < 0) {
       throw new RangeError("density must be a finite, nonnegative number")
@@ -233,7 +238,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     height = nextHeight
   }
 
-  /** Paint the current scene without changing flake positions or settings. */
+  /** Draw the current scene without advancing time. */
   const render = (): void => {
     context.save()
     // Keep positions and density in CSS pixels even when the canvas bitmap has more pixels.
@@ -304,7 +309,13 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     return animation
   }
 
-  const animation: SnowAnimation = { ...defaultOptions, ...options, draw, stop, resume }
+  const animation: SnowAnimation = {
+    ...defaultOptions,
+    ...options,
+    draw,
+    stop,
+    resume,
+  }
 
   animation.draw()
   resume()

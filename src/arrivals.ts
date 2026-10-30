@@ -1,13 +1,15 @@
 import type { CanvasSize, SnowSettings } from "./snow"
-import SnowFlake from "./snowflake"
+import { SnowFlake } from "./snow-flake"
 import { randomExponential, randomNormal } from "./math"
 
+/** An entering flake and its elapsed time at frame end. */
 interface Arrival {
   flake: SnowFlake
   /** Seconds from entry until the end of this frame. */
   age: number
 }
 
+/** Settings and callback for one interval of arrival generation. */
 interface ArrivalStep {
   deltaTime: number
   settings: SnowSettings
@@ -15,28 +17,28 @@ interface ArrivalStep {
   onArrival: (arrival: Arrival) => void
 }
 
+/** A flake and the canvas it enters. */
 interface EntryGeometry {
   flake: SnowFlake
   bounds: CanvasSize
 }
 
 /**
- * Generate edge arrivals that maintain the requested visible population.
+ * Create an independent edge-arrival generator that maintains the target visible population.
  *
- * For any speed, direction, and size category:
- * arrival rate = target visible count * desired category fraction * crossing rate.
- * Average time visible is 1 / crossing rate, so the visible count has the desired fraction.
+ * Flakes that leave sooner must arrive more often; otherwise slow flakes would
+ * dominate the scene. Arrival frequency accounts for speed, direction, and size.
+ * Random timing lets the visible count fluctuate around the target.
  *
- * Candidates are first weighted by speed, then accepted with probability
- * crossingRate / (speed * crossingBound). The speed factors cancel. The candidate
- * rate supplies the matching geometric bound, leaving the required crossing rate.
- * Rejected candidates consume their wait; retrying them would inflate arrivals.
- * Autofill samples the visible population directly and does not use this weighting.
+ * Each advance uses the current settings and retains unfinished timing across
+ * frames and rate changes. It reports flakes at their entry positions, with their
+ * elapsed time at frame end so the caller can advance them to the current frame.
  */
-export default function createArrivals() {
-  // Unspent candidate wait in rate-independent units, preserved across rate changes.
+export function createArrivals() {
+  // Store unused random spacing rather than seconds so rate changes apply immediately.
   let remainingArrivalIntensity: number | null = null
 
+  /** Emit entries during this interval, reporting each flake's age at frame end. */
   const advance = ({ deltaTime, settings, bounds, onArrival }: ArrivalStep): void => {
     const { width, height } = bounds
 
@@ -44,10 +46,11 @@ export default function createArrivals() {
       return
     }
 
+    // For flakes with a given speed, direction, and size:
+    // arrivals per second = desired visible count * crossingRate.
     const proposal = speedProposal(settings)
 
-    // width * height * crossingBound equals hypot(width, height).
-    // Generate enough candidates to cover every speed and direction, then reject the excess.
+    // Target count * crossingBound simplifies to density / 1,000,000 * hypot(width, height).
     const candidateRate =
       (settings.density / 1_000_000) *
       Math.hypot(width, height) *
@@ -64,6 +67,7 @@ export default function createArrivals() {
     // Upper bound on crossingRate / speed for every direction and flake size.
     const crossingBound = Math.hypot(1 / width, 1 / height)
     let timeLeft = deltaTime
+    // These draws average 1; dividing by candidateRate gives seconds between candidates.
     let nextArrival = remainingArrivalIntensity ?? randomExponential()
 
     while (candidateRate * timeLeft >= nextArrival) {
@@ -71,13 +75,16 @@ export default function createArrivals() {
       nextArrival = randomExponential()
       const speed = sampleArrivalSpeed(proposal)
 
+      // Rejected candidates consume their wait; retrying would inflate arrivals.
       if (speed === undefined) {
         continue
       }
 
       const snowFlake = new SnowFlake(settings, speed)
 
-      // Faster crossings need more arrivals to maintain the same visible population.
+      // The sampler favors speeds in proportion to speed. Dividing by speed here
+      // removes that bias; multiplying by crossingRate replaces it with the weighting
+      // needed to maintain the visible distribution. crossingBound keeps this a probability.
       const isAccepted =
         snowFlake.size > 0 &&
         Math.random() * speed * crossingBound < crossingRate({ flake: snowFlake, bounds })
@@ -96,13 +103,17 @@ export default function createArrivals() {
   return { advance }
 }
 
-/** Fraction of a uniform population crossing the edges per second at this velocity. */
-const crossingRate = ({ flake, bounds: { width, height } }: EntryGeometry): number =>
-  Math.abs(flake.velocityX) / (width + flake.size) +
-  Math.abs(flake.velocityY) / (height + flake.size)
+/** Return the crossing rate, equal to 1 / average seconds visible. */
+function crossingRate({ flake, bounds: { width, height } }: EntryGeometry): number {
+  // A circle stays partly visible until its center clears the edge by its radius.
+  return (
+    Math.abs(flake.velocityX) / (width + flake.size) +
+    Math.abs(flake.velocityY) / (height + flake.size)
+  )
+}
 
-/** Choose an incoming edge and position, weighted to maintain even coverage. */
-const enter = ({ flake, bounds: { width, height } }: EntryGeometry): void => {
+/** Place the flake at a random position on an incoming edge. */
+function enter({ flake, bounds: { width, height } }: EntryGeometry): void {
   const radius = flake.size / 2
   // An edge admits more flakes when it is longer or the inward motion is faster.
   const horizontalEdgeWeight = (width + flake.size) * Math.abs(flake.velocityY)
@@ -117,27 +128,27 @@ const enter = ({ flake, bounds: { width, height } }: EntryGeometry): void => {
   }
 }
 
-/** Candidate speed distribution; component weights have units of CSS pixels per second. */
+/**
+ * Parameters for choosing candidate speeds. The weights set each source's share
+ * of candidates and, through their sum, the candidate arrival rate.
+ */
 interface SpeedProposal {
   /** Requested mean of the visible speed distribution, before clamping at zero. */
   mean: number
   /** Absolute value of the requested speed deviation. */
   deviation: number
-  /** Weight of the normal component; zero for nonpositive means. */
+  /** Weight of bell-curve candidates; zero for nonpositive means. */
   normalWeight: number
-  /** Weight of the Rayleigh tail that covers faster candidates. */
+  /** Weight of extra fast candidates, needed because faster flakes must arrive more often. */
   tailWeight: number
 }
 
-/**
- * Build a candidate distribution covering the desired arrival speeds.
- * A normal handles the center; a Rayleigh tail covers rare fast flakes without a cutoff.
- * The component weights also set the candidate rate in advance.
- */
-const speedProposal = ({ meanSpeed, sdSpeed }: SnowSettings): SpeedProposal => {
+/** Calculate the parameters and weights for candidate-speed sampling. */
+function speedProposal({ meanSpeed, sdSpeed }: SnowSettings): SpeedProposal {
   const deviation = Math.abs(sdSpeed)
   const negativeMean = deviation === 0 ? 0 : Math.min(0, meanSpeed) / deviation
 
+  // Extra fast candidates cover the speed weighting without limiting maximum speed.
   return {
     mean: meanSpeed,
     deviation,
@@ -146,16 +157,13 @@ const speedProposal = ({ meanSpeed, sdSpeed }: SnowSettings): SpeedProposal => {
   }
 }
 
-/**
- * Accept candidates in proportion to the desired speed-weighted normal distribution.
- * Returning undefined discards this arrival; retrying would inflate the arrival rate.
- */
-const sampleArrivalSpeed = ({
+/** Sample a positive candidate speed, or return undefined to reject it. */
+function sampleArrivalSpeed({
   mean,
   deviation,
   normalWeight,
   tailWeight,
-}: SpeedProposal): number | undefined => {
+}: SpeedProposal): number | undefined {
   if (Math.random() * (normalWeight + tailWeight) < normalWeight) {
     const speed = randomNormal(mean, deviation)
 
@@ -168,7 +176,7 @@ const sampleArrivalSpeed = ({
 
   const speed = normalWeight + deviation * Math.sqrt(2 * randomExponential())
 
-  // Negative means need fewer fast arrivals than the unshifted tail supplies.
+  // For a negative mean, match the positive bell curve while retaining the speed weighting.
   if (mean < 0 && Math.random() >= Math.exp((mean / deviation) * (speed / deviation))) {
     return undefined
   }

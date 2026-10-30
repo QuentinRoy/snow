@@ -30,6 +30,9 @@ export default defineConfig({
         },
       },
     ],
+    rules: {
+      "func-style": ["error", "declaration", { allowArrowFunctions: true }],
+    },
   },
   pack: {
     dts: { sourcemap: true },

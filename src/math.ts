@@ -1,5 +1,5 @@
-/** Draw uniformly between 0 and 1, excluding zero so logarithms stay finite. */
-const randomPositiveUniform = (): number => {
+/** Draw uniformly between 0 and 1, excluding both endpoints. */
+function randomPositiveUniform(): number {
   let probability = 0
 
   while (probability === 0) {
@@ -9,11 +9,13 @@ const randomPositiveUniform = (): number => {
   return probability
 }
 
-/** Draw a random wait with mean 1; divide by the candidate rate to get seconds. */
-export const randomExponential = (): number => -Math.log(randomPositiveUniform())
+/** Draw a positive number from an exponential distribution with mean 1. */
+export function randomExponential(): number {
+  return -Math.log(randomPositiveUniform())
+}
 
 /** Draw a normal sample with the given mean and absolute standard deviation. */
-export const randomNormal = (mean = 0, sd = 1) => {
+export function randomNormal(mean = 0, sd = 1): number {
   if (sd === 0) {
     return mean
   }
@@ -25,4 +27,7 @@ export const randomNormal = (mean = 0, sd = 1) => {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * Math.abs(sd) + mean
 }
 
-export const toRadians = (degrees: number) => (degrees / 180) * Math.PI
+/** Convert degrees to radians. */
+export function toRadians(degrees: number): number {
+  return (degrees / 180) * Math.PI
+}

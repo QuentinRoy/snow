@@ -2,10 +2,10 @@ import snow from "./snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 
-const resizeCanvas = () => {
+function resizeCanvas() {
   const width = window.innerWidth
   const height = window.innerHeight
-  // Keep the previous bitmap at its drawn size until the replacement is ready.
+  // Set the layout size in CSS pixels and scale the bitmap for sharp rendering.
   canvas.style.width = `${width}px`
   canvas.style.height = `${height}px`
   canvas.width = Math.round(width * window.devicePixelRatio)
@@ -27,15 +27,17 @@ window.addEventListener("resize", () => {
 const controls = document.querySelector("#controls")
 const closeButton = controls.querySelector(".close-button")
 
-const closeControls = () => {
+function closeControls() {
   controls.classList.add("hidden")
 }
 
-const openControls = () => {
+function openControls() {
   controls.classList.remove("hidden")
 }
 
-const areControlsHidden = () => controls.classList.contains("hidden")
+function areControlsHidden() {
+  return controls.classList.contains("hidden")
+}
 
 closeButton.addEventListener("click", () => {
   if (areControlsHidden()) {

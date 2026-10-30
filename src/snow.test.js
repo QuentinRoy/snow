@@ -7,10 +7,11 @@ afterEach(() => {
 })
 
 /**
+ * Create a fake canvas and a manually advanced animation.
  * @param {Parameters<typeof createSnow>[1]} [options] Initial settings.
  * @param {() => number} [random] Random source.
  */
-const setupAnimation = (options, random) => {
+function setupAnimation(options, random) {
   /** @type {FrameRequestCallback | undefined} */
   let nextFrame
 
@@ -647,8 +648,11 @@ test("does not wrap or restart flakes after density reaches zero", () => {
   }
 })
 
-/** @param {number} frameStep Frame duration in milliseconds. */
-const simulateArrivalFrames = (frameStep) => {
+/**
+ * Run a seeded animation with fixed frame intervals.
+ * @param {number} frameStep Frame duration in milliseconds.
+ */
+function simulateArrivalFrames(frameStep) {
   let seed = 574
 
   const { context, frame } = setupAnimation({ autoFill: false, density: 10_000 }, () => {
