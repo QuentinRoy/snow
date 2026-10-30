@@ -1,11 +1,9 @@
-import { snow } from "./dist/snow.js"
+import "./dist/element/register.js"
 
-const canvas = document.querySelector("#snow-canvas")
+/** @type {import("../src/element").SnowElement} */
+const snowfall = document.querySelector("snow-fall")
 
-/** @type {import("../src/snow").SnowAnimation} */
-const animation = snow(canvas)
-
-window.snow = animation
+window.snow = snowfall
 
 const controls = document.querySelector("#controls")
 
@@ -30,34 +28,34 @@ controls.addEventListener(
 for (const input of document.querySelectorAll("#controls > .control > input")) {
   switch (input.id) {
     case "flakeColor": {
-      input.value = animation.flakeColor
+      input.value = snowfall.flakeColor
       input.addEventListener("change", () => {
-        animation.flakeColor = input.value
+        snowfall.flakeColor = input.value
       })
       break
     }
 
     case "fillMode": {
-      input.checked = animation.fillMode === "instant"
+      input.checked = snowfall.fillMode === "instant"
       input.addEventListener("change", () => {
-        animation.fillMode = input.checked === true ? "instant" : "none"
+        snowfall.fillMode = input.checked === true ? "instant" : "none"
       })
       break
     }
 
     case "paused":
     case "showFps": {
-      input.checked = animation[input.id]
+      input.checked = snowfall[input.id]
       input.addEventListener("change", () => {
-        animation[input.id] = input.checked
+        snowfall[input.id] = input.checked
       })
       break
     }
 
     default: {
-      input.value = animation[input.id]
+      input.value = snowfall[input.id]
       input.addEventListener("change", () => {
-        animation[input.id] = Number(input.value)
+        snowfall[input.id] = Number(input.value)
       })
       break
     }
