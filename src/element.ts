@@ -8,6 +8,21 @@ import type { SnowAnimation, SnowOptions } from "./snow.ts"
 const defaultWidth = 300
 const defaultHeight = 150
 
+/**
+ * Build a width/height serializer with the same conversion rules as an HTML canvas.
+ *
+ * Reading an attribute parses its integer prefix, so "12px" reads as 12. Missing or invalid
+ * attributes, negative values, and values above 2³¹−1 use `fallback`. Zero is valid, and
+ * reading never rewrites the attribute.
+ *
+ * Assigning a property first converts to an unsigned 32-bit integer: fractions truncate,
+ * values wrap modulo 2³², and NaN/infinities become zero. HTML then replaces values above
+ * 2³¹−1 with `fallback`. For example, 12.9 writes "12" and -1 writes the fallback.
+ *
+ * @param fallback - The missing/invalid value default: 300 for width, 150 for height.
+ * @see {@link https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-width | HTML canvas dimensions}
+ * @see {@link https://webidl.spec.whatwg.org/#es-unsigned-long | Web IDL unsigned long conversion}
+ */
 function dimension(fallback: number): AttributeSerializer<unknown, number> {
   return {
     parse(value) {
@@ -68,9 +83,7 @@ function nonNegativeNumber(fallback: number): AttributeSerializer<unknown, numbe
 
   return {
     parse(value) {
-      const parsed = parse.call(this, value)
-
-      return Math.max(0, parsed)
+      return Math.max(0, parse(value))
     },
     serialize,
   }
