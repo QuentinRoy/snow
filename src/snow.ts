@@ -1,8 +1,11 @@
 import { createArrivals } from "./arrivals"
 import { SnowFlake } from "./snow-flake"
 
+/** How empty space gets filled. */
+export type FillMode = "instant" | "none"
+
 /** Controls and mutable settings for a snow animation. */
-interface SnowAnimation {
+export interface SnowAnimation {
   /** Pause while keeping the current frame visible. */
   stop: () => void
 
@@ -10,28 +13,31 @@ interface SnowAnimation {
   resume: () => void
 
   /** Average flake diameter in CSS pixels. */
-  meanSize: number
+  flakeSize: number
   /** Standard deviation of flake diameters in CSS pixels. */
-  sdSize: number
+  flakeSizeDeviation: number
   /** Flake color as a CSS color string. */
-  color: string
+  flakeColor: string
   /** Mean of the visible speed distribution in CSS pixels per second. */
-  meanSpeed: number
+  flakeSpeed: number
   /** Standard deviation of speeds in CSS pixels per second. */
-  sdSpeed: number
+  flakeSpeedDeviation: number
   /** Average number of snowflakes per 1,000 by 1,000 CSS-pixel area. */
   density: number
-  /** Fill the canvas at startup and newly exposed areas after resizing. */
-  autoFill: boolean
+  /**
+   * How to fill empty space at startup and in areas exposed by resizing.
+   * "instant" fills it at once; "none" lets flakes drift in from the edges.
+   */
+  fillMode: FillMode
   /**
    * Average direction in degrees from vertically downward.
    * 90 is left, 180 is up, and -90 is right.
    */
-  meanAngle: number
+  flakeDirection: number
   /** Standard deviation of directions in degrees. */
-  sdAngle: number
+  flakeDirectionDeviation: number
   /** Show the frame rate. */
-  isFpsShown: boolean
+  showFps: boolean
 
   /**
    * Apply settings and layout changes, then redraw without advancing time.
@@ -45,7 +51,7 @@ interface SnowAnimation {
 export type SnowSettings = Omit<SnowAnimation, "draw" | "stop" | "resume">
 
 /** Settings that override the defaults at startup. */
-type SnowOptions = Partial<SnowSettings>
+export type SnowOptions = Partial<SnowSettings>
 
 /** Canvas dimensions in CSS pixels. */
 export interface CanvasSize {
@@ -60,36 +66,36 @@ interface ExposedArea extends CanvasSize {
 }
 
 const defaultOptions: SnowSettings = {
-  meanSize: 10,
-  sdSize: 2,
-  meanSpeed: 150,
-  sdSpeed: 10,
-  meanAngle: 0,
-  sdAngle: 5,
-  color: "rgba(255,255,255,0.9)",
+  flakeSize: 10,
+  flakeSizeDeviation: 2,
+  flakeSpeed: 150,
+  flakeSpeedDeviation: 10,
+  flakeDirection: 0,
+  flakeDirectionDeviation: 5,
+  flakeColor: "rgba(255,255,255,0.9)",
   density: 30,
-  autoFill: true,
-  isFpsShown: false,
+  fillMode: "instant",
+  showFps: false,
 }
 
 const numericSettingKeys = [
-  "meanSize",
-  "sdSize",
-  "meanSpeed",
-  "sdSpeed",
-  "meanAngle",
-  "sdAngle",
+  "flakeSize",
+  "flakeSizeDeviation",
+  "flakeSpeed",
+  "flakeSpeedDeviation",
+  "flakeDirection",
+  "flakeDirectionDeviation",
 ] as const
 
 /**
  * Animate snow at a target visible density, with geometry measured in CSS pixels.
  *
  * @remarks
- * Autofill seeds the canvas at startup and on growth. Later flakes enter through
+ * The `"instant"` fill mode seeds the canvas at startup and on growth. Later flakes enter through
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
  */
-export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
+export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
   const context = canvas.getContext("2d")
 
   if (context === null) {
@@ -228,7 +234,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     }
 
     // Preserve the shared region; only newly exposed space needs immediate filling.
-    const exposedCount = animation.autoFill ? count - overlapCount : 0
+    const exposedCount = animation.fillMode === "instant" ? count - overlapCount : 0
     let survivingCount = 0
 
     for (const snowFlake of snowFlakes) {
@@ -284,7 +290,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
       context.fill()
     }
 
-    if (animation.isFpsShown) {
+    if (animation.showFps) {
       const averageFrameDuration =
         frameDurations.length > 0
           ? frameDurations.reduce((a, b) => a + b, 0) / frameDurations.length

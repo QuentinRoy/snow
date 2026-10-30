@@ -1,4 +1,4 @@
-import snow from "./snow.js"
+import { snow } from "./snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 
@@ -14,7 +14,7 @@ function resizeCanvas() {
 
 resizeCanvas()
 
-/** @type {ReturnType<typeof import("../src/snow").default>} */
+/** @type {import("../src/snow").SnowAnimation} */
 const animation = snow(canvas)
 
 window.snow = animation
@@ -61,7 +61,7 @@ controls.addEventListener(
 
 for (const input of document.querySelectorAll("#controls > .control > input")) {
   switch (input.id) {
-    case "color": {
+    case "flakeColor": {
       input.value = window.snow[input.id]
       input.addEventListener("change", () => {
         window.snow[input.id] = input.value
@@ -69,8 +69,15 @@ for (const input of document.querySelectorAll("#controls > .control > input")) {
       break
     }
 
-    case "autoFill":
-    case "isFpsShown": {
+    case "fillMode": {
+      input.checked = window.snow.fillMode === "instant"
+      input.addEventListener("change", () => {
+        window.snow.fillMode = input.checked === true ? "instant" : "none"
+      })
+      break
+    }
+
+    case "showFps": {
       input.checked = window.snow[input.id]
       input.addEventListener("change", () => {
         window.snow[input.id] = input.checked
