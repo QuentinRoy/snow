@@ -37,17 +37,10 @@ export interface SnowAnimation {
   flakeDirectionDeviation: number
   /** Show the frame rate. */
   showFps: boolean
-
-  /**
-   * Apply settings and layout changes, then redraw without advancing time.
-   *
-   * @remarks You don't usually need to call this method directly.
-   */
-  draw: () => void
 }
 
 /** Current appearance, motion, and density settings. */
-export type SnowSettings = Omit<SnowAnimation, "draw">
+export type SnowSettings = SnowAnimation
 
 /** Settings that override the defaults at startup. */
 export type SnowOptions = Partial<SnowSettings>
@@ -109,18 +102,6 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   let height = 0
   const arrivals = createArrivals()
 
-  // Reading the client size can force a layout, so only do it after a resize.
-  let isSizeStale = true
-
-  const resizeObserver =
-    typeof ResizeObserver === "undefined"
-      ? undefined
-      : new ResizeObserver(() => {
-          isSizeStale = true
-        })
-
-  resizeObserver?.observe(canvas)
-
   const frameDurations: number[] = []
   const maxFrameDurations = 50
   let nextFrameDurationIndex = 0
@@ -130,7 +111,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     // The frame timestamp can precede the resume time; also avoid large jumps after a delayed frame.
     const deltaTime = Math.min(Math.max(0, (now - lastFrameTime) / 1000), 0.1)
 
-    synchronize()
+    validateSettings()
     advanceFlakes(deltaTime)
 
     lastFrameTime = now
@@ -202,8 +183,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     }
   }
 
-  /** Validate settings and apply resizing without advancing time. */
-  const synchronize = (): void => {
+  const validateSettings = (): void => {
     if (!Number.isFinite(animation.density) || animation.density < 0) {
       throw new RangeError("density must be a finite, nonnegative number")
     }
@@ -213,12 +193,10 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
         throw new RangeError(`${key} must be a finite number`)
       }
     }
+  }
 
-    const nextWidth = isSizeStale ? canvas.clientWidth : width
-    const nextHeight = isSizeStale ? canvas.clientHeight : height
-
-    isSizeStale = resizeObserver === undefined
-
+  /** Keep flakes in the area shared with the previous size, and fill the rest if requested. */
+  const applyLayout = (nextWidth: number, nextHeight: number): void => {
     const overlapWidth = Math.min(width, nextWidth)
     const overlapHeight = Math.min(height, nextHeight)
     const count = Math.round((animation.density * nextWidth * nextHeight) / 1_000_000)
@@ -255,6 +233,30 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
 
     width = nextWidth
     height = nextHeight
+  }
+
+  /**
+   * Match the canvas resolution to its displayed size, then redraw without advancing time.
+   * Setting the resolution erases the bitmap, so the redraw is required.
+   */
+  const resize = (
+    cssWidth: number,
+    cssHeight: number,
+    devicePixelSize?: ResizeObserverSize,
+  ): void => {
+    validateSettings()
+
+    const vertical =
+      devicePixelSize !== undefined && getComputedStyle(canvas).writingMode !== "horizontal-tb"
+
+    canvas.width =
+      (vertical ? devicePixelSize?.blockSize : devicePixelSize?.inlineSize) ??
+      Math.round(cssWidth * devicePixelRatio)
+    canvas.height =
+      (vertical ? devicePixelSize?.inlineSize : devicePixelSize?.blockSize) ??
+      Math.round(cssHeight * devicePixelRatio)
+    applyLayout(cssWidth, cssHeight)
+    render()
   }
 
   /** Draw the current scene without advancing time. */
@@ -305,12 +307,6 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     context.restore()
   }
 
-  const draw = (): void => {
-    isSizeStale = true
-    synchronize()
-    render()
-  }
-
   let isPaused = options?.paused ?? false
 
   const startFrames = (): void => {
@@ -321,7 +317,6 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   const animation: SnowAnimation = {
     ...defaultOptions,
     ...options,
-    draw,
     get paused() {
       return isPaused
     },
@@ -343,7 +338,40 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     },
   }
 
-  animation.draw()
+  resize(canvas.clientWidth, canvas.clientHeight)
+
+  let pixelRatioQuery: MediaQueryList | undefined
+
+  const watchPixelRatio = (): void => {
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
+    pixelRatioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
+    pixelRatioQuery.addEventListener("change", onPixelRatioChange)
+  }
+
+  const onPixelRatioChange = (): void => {
+    watchPixelRatio()
+    resize(width, height)
+  }
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    for (const { contentRect, devicePixelContentBoxSize } of entries) {
+      if (devicePixelContentBoxSize?.[0] === undefined && pixelRatioQuery === undefined) {
+        watchPixelRatio()
+      }
+
+      resize(contentRect.width, contentRect.height, devicePixelContentBoxSize?.[0])
+    }
+  })
+
+  try {
+    // Device-pixel boxes also report a change of `devicePixelRatio` alone, such as a zoom or a move
+    // to another monitor, which leaves the CSS size unchanged.
+    resizeObserver.observe(canvas, { box: "device-pixel-content-box" })
+  } catch {
+    // Browsers without device-pixel boxes reject the option.
+    resizeObserver.observe(canvas)
+    watchPixelRatio()
+  }
 
   if (!isPaused) {
     startFrames()

@@ -12,10 +12,10 @@ npm install @quentinroy/snow
 
 ## Usage
 
-Create a canvas with a width and height:
+Create a canvas and size it with CSS:
 
 ```html
-<canvas id="snow-canvas" width="800" height="600"></canvas>
+<canvas id="snow-canvas" style="width: 800px; height: 600px"></canvas>
 ```
 
 Run this code in the browser after the canvas exists, using your application's bundler:
@@ -31,7 +31,7 @@ const animation = snow(canvas, { flakeColor: "white", density: 30, fillMode: "in
 
 The options argument is optional. Call `snow(canvas)` to use the defaults.
 
-Snow measures the displayed canvas in CSS pixels and scales its drawing to the canvas resolution. Set `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio` to keep the drawing sharp on high-resolution screens. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation. Update the CSS size, canvas resolution, and drawing together when resizing; call `animation.draw()` immediately after changing the canvas dimensions. The [demo](demo/demo.js) does this in its window resize handler to avoid stretching the previous frame.
+Snow watches the canvas and sets `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio`, so the drawing stays sharp on high-resolution screens, including in vertical writing modes. Snow also updates the bitmap when pixel density changes, including while paused. In browsers without device-pixel resize observation, it watches the screen resolution for changes. Don't set them yourself; size the canvas with CSS only. After every resize Snow redraws the frame, even while the animation is paused. Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills the new area at once; with `"none"`, the new area stays empty until flakes drift in. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation.
 
 ## Without a bundler
 
@@ -45,7 +45,7 @@ Load Snow directly from jsDelivr using a browser module. Save this as an HTML fi
     <title>Snow</title>
   </head>
   <body>
-    <canvas id="snow-canvas" width="800" height="600" style="background: #172033"></canvas>
+    <canvas id="snow-canvas" style="width: 800px; height: 600px; background: #172033"></canvas>
     <script type="module">
       import { snow } from "https://cdn.jsdelivr.net/npm/@quentinroy/snow/dist/snow.js"
 
@@ -99,9 +99,9 @@ animation.paused = true
 animation.paused = false
 ```
 
-Size, speed, direction, and color changes apply to new arrivals. Visible flakes keep their attributes until they leave. Arrival timing is independent of departures: reducing density does not pause arrivals until the count falls below a quota. Changing a parameter never fills or clears the visible scene immediately, regardless of `fillMode`. Stationary flakes stay where they are, including when density is set to `0`. The frame-rate display changes on the next draw.
+Size, speed, direction, and color changes apply to new arrivals. Visible flakes keep their attributes until they leave. Arrival timing is independent of departures: reducing density does not pause arrivals until the count falls below a quota. Changing a parameter never fills or clears the visible scene immediately, regardless of `fillMode`. Stationary flakes stay where they are, including when density is set to `0`. The frame-rate display changes on the next frame.
 
-`animation.draw()` applies option and layout changes, then redraws without advancing time. While paused, call it after resizing to update coverage. You usually do not need to call it yourself. Set `animation.paused = true` before removing the canvas to stop scheduling frames. To also erase the paused frame, clear the canvas yourself:
+Set `animation.paused = true` before removing the canvas to stop scheduling frames. To also erase the paused frame, clear the canvas yourself:
 
 ```js
 animation.paused = true
