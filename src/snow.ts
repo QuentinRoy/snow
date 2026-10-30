@@ -103,6 +103,18 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   let height = 0
   const arrivals = createArrivals()
 
+  // Reading the client size can force a layout, so only do it after a resize.
+  let isSizeStale = true
+
+  const resizeObserver =
+    typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(() => {
+          isSizeStale = true
+        })
+
+  resizeObserver?.observe(canvas)
+
   const frameDurations: number[] = []
   const maxFrameDurations = 50
   let nextFrameDurationIndex = 0
@@ -196,8 +208,10 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
       }
     }
 
-    const nextWidth = canvas.clientWidth
-    const nextHeight = canvas.clientHeight
+    const nextWidth = isSizeStale ? canvas.clientWidth : width
+    const nextHeight = isSizeStale ? canvas.clientHeight : height
+
+    isSizeStale = resizeObserver === undefined
 
     const overlapWidth = Math.min(width, nextWidth)
     const overlapHeight = Math.min(height, nextHeight)
@@ -286,6 +300,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   }
 
   const draw = (): void => {
+    isSizeStale = true
     synchronize()
     render()
   }

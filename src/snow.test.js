@@ -756,3 +756,20 @@ test("rejects an overflowing arrival rate before entering the sampling loop", ()
     frame(100)
   }).toThrow("Snowfall arrival rate must be finite")
 })
+
+test("reads the canvas size only after the resize observer reports a change", () => {
+  const resizeObserver = vi.fn(
+    class {
+      observe = vi.fn()
+    },
+  )
+
+  vi.stubGlobal("ResizeObserver", resizeObserver)
+  const { canvas, context, frame } = setupAnimation()
+  canvas.clientWidth = 200
+  frame(20)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+  resizeObserver.mock.calls[0][0]()
+  frame(40)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 200, 100)
+})
