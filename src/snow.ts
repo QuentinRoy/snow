@@ -11,11 +11,11 @@ interface SnowAnimation {
   sdSize: number
   /** Flake color as a CSS color string. */
   color: string
-  /** Average speed in CSS pixels per second. */
+  /** Mean of the visible speed distribution in CSS pixels per second. */
   meanSpeed: number
   /** Standard deviation of speeds in CSS pixels per second. */
   sdSpeed: number
-  /** Target number of snowflakes per 1,000 by 1,000 CSS-pixel area. */
+  /** Average number of snowflakes per 1,000 by 1,000 CSS-pixel area. */
   density: number
   /** Fill the canvas at startup and newly exposed areas after resizing. */
   autoFill: boolean
@@ -46,7 +46,10 @@ interface CanvasSize {
   height: number
 }
 
-type FlakeArea = CanvasSize & { x?: number; y?: number; isVisible?: boolean }
+interface ExposedArea extends CanvasSize {
+  overlapWidth: number
+  overlapHeight: number
+}
 
 const defaultOptions: SnowSettings = {
   meanSize: 10,
@@ -61,14 +64,13 @@ const defaultOptions: SnowSettings = {
   isFpsShown: false,
 }
 
-const flakeSettingKeys = [
+const numericSettingKeys = [
   "meanSize",
   "sdSize",
   "meanSpeed",
   "sdSpeed",
   "meanAngle",
   "sdAngle",
-  "color",
 ] as const
 
 export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
@@ -83,9 +85,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   let lastFrameTime = Date.now()
   let width = 0
   let height = 0
-  let previousDensity = -1
-  let targetFlakeCount = 0
-  let flakeSettings: SnowSettings = { ...defaultOptions, ...options }
+  let remainingArrivalIntensity: number | null = null
 
   // Keep recent frame durations for the FPS counter.
   const frameDurations: number[] = []
@@ -109,60 +109,99 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   }
 
   const advanceFlakes = (deltaTime: number): void => {
-    let flakesToRetire = Math.max(0, snowFlakes.length - targetFlakeCount)
     let survivingCount = 0
-    const bounds = { width, height }
 
     for (const snowFlake of snowFlakes) {
-      const hasExited = snowFlake.tick(deltaTime, bounds)
+      snowFlake.tick(deltaTime)
 
-      // Retire excess at the edge so resize and density changes preserve visible flakes.
-      if (hasExited && flakesToRetire > 0) {
-        flakesToRetire -= 1
-        continue
+      if (snowFlake.isInRectangle(width, height)) {
+        snowFlakes[survivingCount] = snowFlake
+        survivingCount += 1
       }
-
-      if (hasExited && snowFlake.settings !== flakeSettings) {
-        snowFlake.update(flakeSettings)
-        snowFlake.enter(bounds)
-        snowFlake.tick(Math.random() * deltaTime, bounds)
-      }
-
-      snowFlakes[survivingCount] = snowFlake
-      survivingCount += 1
     }
 
     snowFlakes.length = survivingCount
+    emitFlakes(deltaTime)
   }
 
-  const addFlakes = (
-    count: number,
-    { x = 0, y = 0, width: areaWidth, height: areaHeight, isVisible = false }: FlakeArea,
-  ): void => {
-    for (let i = 0; i < count; i += 1) {
-      const snowFlake = new SnowFlake(flakeSettings)
-      snowFlake.isVisible = isVisible
-      snowFlake.x = x + Math.random() * areaWidth
-      snowFlake.y = y + Math.random() * areaHeight
-      snowFlakes.push(snowFlake)
-    }
-  }
-
-  const updateFlakeSettings = (): void => {
-    if (!flakeSettingKeys.some((key) => animation[key] !== flakeSettings[key])) {
+  const emitFlakes = (deltaTime: number): void => {
+    if (width === 0 || height === 0 || animation.density === 0 || deltaTime <= 0) {
       return
     }
 
-    flakeSettings = { ...animation }
+    const proposal = speedProposal(animation)
 
-    for (const snowFlake of snowFlakes) {
-      if (snowFlake.isVisible) {
+    const rate =
+      (animation.density / 1_000_000) *
+      Math.hypot(width, height) *
+      (proposal.normalWeight + proposal.tailWeight)
+
+    if (!Number.isFinite(rate)) {
+      throw new RangeError("Snowfall arrival rate must be finite")
+    }
+
+    if (rate === 0) {
+      return
+    }
+
+    const bounds = { width, height }
+    const crossingBound = Math.hypot(1 / width, 1 / height)
+    let timeLeft = deltaTime
+    let nextArrival = remainingArrivalIntensity ?? randomExponential()
+
+    while (rate * timeLeft >= nextArrival) {
+      timeLeft -= nextArrival / rate
+      nextArrival = randomExponential()
+      const speed = sampleArrivalSpeed(proposal)
+
+      if (speed === undefined) {
         continue
       }
 
-      snowFlake.update(flakeSettings)
-      snowFlake.x = Math.random() * width
-      snowFlake.y = Math.random() * height
+      const snowFlake = new SnowFlake(animation, speed)
+
+      // Inverse residence time weights arrivals without favoring slow visible flakes.
+      if (
+        snowFlake.size > 0 &&
+        Math.random() * speed * crossingBound < snowFlake.crossingRate(bounds)
+      ) {
+        snowFlake.enter(bounds)
+        snowFlake.tick(timeLeft)
+
+        if (snowFlake.isInRectangle(width, height)) {
+          snowFlakes.push(snowFlake)
+        }
+      }
+    }
+
+    remainingArrivalIntensity = nextArrival - rate * timeLeft
+  }
+
+  const fillExposedArea = (
+    count: number,
+    { width: nextWidth, height: nextHeight, overlapWidth, overlapHeight }: ExposedArea,
+  ): void => {
+    for (let i = 0; i < count; i += 1) {
+      const snowFlake = new SnowFlake(animation)
+      const radius = snowFlake.size / 2
+
+      if (overlapWidth === 0 || overlapHeight === 0) {
+        snowFlake.x = Math.random() * (nextWidth + snowFlake.size) - radius
+        snowFlake.y = Math.random() * (nextHeight + snowFlake.size) - radius
+      } else {
+        const rightArea = (nextWidth - overlapWidth) * (nextHeight + snowFlake.size)
+        const bottomArea = (overlapWidth + snowFlake.size) * (nextHeight - overlapHeight)
+
+        if (Math.random() * (rightArea + bottomArea) < rightArea) {
+          snowFlake.x = overlapWidth + radius + Math.random() * (nextWidth - overlapWidth)
+          snowFlake.y = Math.random() * (nextHeight + snowFlake.size) - radius
+        } else {
+          snowFlake.x = Math.random() * (overlapWidth + snowFlake.size) - radius
+          snowFlake.y = overlapHeight + radius + Math.random() * (nextHeight - overlapHeight)
+        }
+      }
+
+      snowFlakes.push(snowFlake)
     }
   }
 
@@ -171,18 +210,17 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
       throw new RangeError("density must be a finite, nonnegative number")
     }
 
-    updateFlakeSettings()
+    for (const key of numericSettingKeys) {
+      if (!Number.isFinite(animation[key])) {
+        throw new RangeError(`${key} must be a finite number`)
+      }
+    }
 
     const nextWidth = canvas.clientWidth
     const nextHeight = canvas.clientHeight
 
-    if (nextWidth === width && nextHeight === height && previousDensity === animation.density) {
-      return
-    }
-
     const overlapWidth = Math.min(width, nextWidth)
     const overlapHeight = Math.min(height, nextHeight)
-    const exposedArea = nextWidth * nextHeight - overlapWidth * overlapHeight
     const count = Math.round((animation.density * nextWidth * nextHeight) / 1_000_000)
 
     if (!Number.isSafeInteger(count)) {
@@ -190,7 +228,12 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     }
 
     const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
-    const exposedCount = count - overlapCount
+
+    if (nextWidth === width && nextHeight === height) {
+      return
+    }
+
+    const exposedCount = animation.autoFill ? count - overlapCount : 0
     let survivingCount = 0
 
     for (const snowFlake of snowFlakes) {
@@ -202,32 +245,15 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
     snowFlakes.length = survivingCount
 
-    addFlakes(overlapCount - snowFlakes.length, { width: overlapWidth, height: overlapHeight })
-
-    const rightArea = (nextWidth - overlapWidth) * nextHeight
-
-    for (let i = 0; i < exposedCount; i += 1) {
-      if (Math.random() * exposedArea < rightArea) {
-        addFlakes(1, {
-          x: overlapWidth,
-          width: nextWidth - overlapWidth,
-          height: nextHeight,
-          isVisible: animation.autoFill,
-        })
-      } else {
-        addFlakes(1, {
-          y: overlapHeight,
-          width: overlapWidth,
-          height: nextHeight - overlapHeight,
-          isVisible: animation.autoFill,
-        })
-      }
-    }
+    fillExposedArea(exposedCount, {
+      width: nextWidth,
+      height: nextHeight,
+      overlapWidth,
+      overlapHeight,
+    })
 
     width = nextWidth
     height = nextHeight
-    previousDensity = animation.density
-    targetFlakeCount = count
   }
 
   const render = (): void => {
@@ -246,7 +272,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     let currentColor: string | undefined
 
     for (const snowFlake of snowFlakes) {
-      if (!snowFlake.isVisible || snowFlake.size <= 0) {
+      if (snowFlake.size <= 0) {
         continue
       }
 
@@ -309,27 +335,25 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 class SnowFlake {
   x = 0
   y = 0
-  size = 0
-  speed = 0
-  velocityX = 0
-  velocityY = 0
-  isVisible = false
-  color = ""
-  settings: SnowSettings
+  size: number
+  color: string
+  velocityX: number
+  velocityY: number
 
-  constructor(options: SnowSettings) {
-    this.settings = options
-    this.update(options)
-  }
-
-  update(options: SnowSettings): void {
-    this.settings = options
+  constructor(options: SnowSettings, speed?: number) {
     this.color = options.color
     this.size = Math.max(0, randomNormal(options.meanSize, options.sdSize))
-    this.speed = Math.max(0, randomNormal(options.meanSpeed, options.sdSpeed))
+    const flakeSpeed = Math.max(0, speed ?? randomNormal(options.meanSpeed, options.sdSpeed))
     const angle = randomNormal(toRadians(270 - options.meanAngle), toRadians(options.sdAngle))
-    this.velocityX = Math.cos(angle) * this.speed
-    this.velocityY = -Math.sin(angle) * this.speed
+    this.velocityX = Math.cos(angle) * flakeSpeed
+    this.velocityY = -Math.sin(angle) * flakeSpeed
+  }
+
+  crossingRate({ width, height }: CanvasSize): number {
+    return (
+      Math.abs(this.velocityX) / (width + this.size) +
+      Math.abs(this.velocityY) / (height + this.size)
+    )
   }
 
   enter({ width, height }: CanvasSize): void {
@@ -344,28 +368,11 @@ class SnowFlake {
       this.x = this.velocityX > 0 ? -radius : width + radius
       this.y = Math.random() * (height + this.size) - radius
     }
-
-    this.isVisible = this.speed > 0
   }
 
-  tick(deltaTime: number, { width, height }: CanvasSize): boolean {
+  tick(deltaTime: number): void {
     this.x += this.velocityX * deltaTime
     this.y += this.velocityY * deltaTime
-    const radius = this.size / 2
-    const hasExited = !this.isInRectangle(width, height)
-
-    // Hidden flakes enter on their first wrap, without a separate creation rate.
-    if (this.x < -radius || this.x > width + radius) {
-      this.isVisible = true
-      this.x = wrap(this.x + radius, width + this.size) - radius
-    }
-
-    if (this.y < -radius || this.y > height + radius) {
-      this.isVisible = true
-      this.y = wrap(this.y + radius, height + this.size) - radius
-    }
-
-    return hasExited
   }
 
   isInRectangle(width: number, height: number): boolean {
@@ -380,7 +387,62 @@ class SnowFlake {
   }
 }
 
-const wrap = (position: number, length: number): number => ((position % length) + length) % length
+interface SpeedProposal {
+  mean: number
+  deviation: number
+  normalWeight: number
+  tailWeight: number
+}
+
+// The speed-weighted normal is bounded by a normal plus a shifted Rayleigh tail.
+// A negative mean uses an unshifted tail with exponential thinning instead.
+const speedProposal = ({ meanSpeed, sdSpeed }: SnowSettings): SpeedProposal => {
+  const deviation = Math.abs(sdSpeed)
+  const negativeMean = deviation === 0 ? 0 : Math.min(0, meanSpeed) / deviation
+
+  return {
+    mean: meanSpeed,
+    deviation,
+    normalWeight: Math.max(0, meanSpeed),
+    tailWeight: (deviation / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * negativeMean ** 2),
+  }
+}
+
+const sampleArrivalSpeed = ({
+  mean,
+  deviation,
+  normalWeight,
+  tailWeight,
+}: SpeedProposal): number | undefined => {
+  // This normal/Rayleigh envelope weights speeds exactly, without a cutoff or resampling loop.
+  if (Math.random() * (normalWeight + tailWeight) < normalWeight) {
+    const speed = randomNormal(mean, deviation)
+
+    if (speed > 0 && (speed >= normalWeight || Math.random() * normalWeight < speed)) {
+      return speed
+    }
+
+    return undefined
+  }
+
+  const speed = normalWeight + deviation * Math.sqrt(2 * randomExponential())
+
+  if (mean < 0 && Math.random() >= Math.exp((mean / deviation) * (speed / deviation))) {
+    return undefined
+  }
+
+  return Number.isFinite(speed) && speed > 0 ? speed : undefined
+}
+
+const randomExponential = (): number => {
+  let probability = 0
+
+  while (probability === 0) {
+    probability = Math.random()
+  }
+
+  return -Math.log(probability)
+}
 
 const randomNormal = (mean = 0, sd = 1) => {
   if (sd === 0) {
