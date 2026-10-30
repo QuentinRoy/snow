@@ -26,7 +26,7 @@ function setupAnimation(options, random) {
   const cancelFrame = vi.fn()
   vi.stubGlobal("requestAnimationFrame", requestFrame)
   vi.stubGlobal("cancelAnimationFrame", cancelFrame)
-  const now = vi.spyOn(Date, "now").mockReturnValue(0)
+  const now = vi.spyOn(performance, "now").mockReturnValue(0)
   const randomMock = vi.spyOn(Math, "random").mockReturnValue(0.5)
 
   if (random) {
@@ -66,8 +66,7 @@ function setupAnimation(options, random) {
   /** @param {number} time Frame time in milliseconds. */
   const frame = (time) => {
     context.arc.mockClear()
-    now.mockReturnValue(time)
-    nextFrame?.(0)
+    nextFrame?.(time)
   }
 
   /** @param {number} width Displayed width. @param {number} height Displayed height. */
@@ -756,4 +755,21 @@ test("rejects an overflowing arrival rate before entering the sampling loop", ()
   expect(() => {
     frame(100)
   }).toThrow("Snowfall arrival rate must be finite")
+})
+
+test("reads the canvas size only after the resize observer reports a change", () => {
+  const resizeObserver = vi.fn(
+    class {
+      observe = vi.fn()
+    },
+  )
+
+  vi.stubGlobal("ResizeObserver", resizeObserver)
+  const { canvas, context, frame } = setupAnimation()
+  canvas.clientWidth = 200
+  frame(20)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+  resizeObserver.mock.calls[0][0]()
+  frame(40)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 200, 100)
 })
