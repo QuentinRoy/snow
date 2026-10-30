@@ -1,5 +1,5 @@
 import type { SnowSettings } from "./snow"
-import { randomNormal } from "./random"
+import { randomNormal, toRadians } from "./math"
 
 /** A flake keeps its appearance and velocity until it leaves the canvas. */
 export default class SnowFlake {
@@ -37,5 +37,3 @@ export default class SnowFlake {
     )
   }
 }
-
-const toRadians = (degrees: number) => (degrees / 180) * Math.PI

@@ -24,3 +24,5 @@ export const randomNormal = (mean = 0, sd = 1) => {
 
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * Math.abs(sd) + mean
 }
+
+export const toRadians = (degrees: number) => (degrees / 180) * Math.PI

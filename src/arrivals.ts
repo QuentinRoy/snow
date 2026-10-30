@@ -1,6 +1,6 @@
 import type { CanvasSize, SnowSettings } from "./snow"
 import SnowFlake from "./snowflake"
-import { randomExponential, randomNormal } from "./random"
+import { randomExponential, randomNormal } from "./math"
 
 interface Arrival {
   flake: SnowFlake
