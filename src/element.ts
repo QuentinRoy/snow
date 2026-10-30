@@ -50,13 +50,14 @@ function finiteNumber(fallback: number): AttributeSerializer<unknown, number> {
 }
 
 function toNumber(value: number): number {
-  // Unary plus uses Web IDL's ToNumber conversion, which rejects BigInt.
-  // eslint-disable-next-line typescript/no-unnecessary-type-conversion
+  // JS assignments can bypass this type; Web IDL's ToNumber must still reject BigInt.
+  // oxlint-disable-next-line typescript/no-unnecessary-type-conversion
   return +value
 }
 
 function toDOMString(value: string): string {
-  // eslint-disable-next-line typescript/no-unnecessary-template-expression
+  // JS assignments can bypass this type; template coercion rejects Symbol, unlike String().
+  // oxlint-disable-next-line typescript/no-unnecessary-template-expression
   return `${value}`
 }
 
