@@ -245,25 +245,56 @@ test("shows a finite frame rate before the first animation frame", () => {
   expect(context.fillText).toHaveBeenLastCalledWith("50 FPS", 10, 30)
 })
 
-test("starts, stops, and resumes without scheduling duplicate frames", () => {
+test("pauses and resumes without scheduling duplicate frames", () => {
   const { cancelFrame, requestFrame, snow } = setupAnimation()
+  expect(snow.paused).toBe(false)
   expect(requestFrame).toHaveBeenCalledTimes(1)
-  snow.resume()
+  snow.paused = false
   expect(requestFrame).toHaveBeenCalledTimes(1)
-  snow.stop()
-  snow.stop()
+  snow.paused = true
+  snow.paused = true
+  expect(snow.paused).toBe(true)
   expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
-  snow.resume()
+  snow.paused = false
+  snow.paused = false
+  expect(snow.paused).toBe(false)
   expect(requestFrame).toHaveBeenCalledTimes(2)
 })
 
-test("resuming ignores time spent stopped", () => {
+test("keeps the last frame visible while paused", () => {
+  const { context, frame, snow } = setupAnimation()
+  frame(20)
+  snow.paused = true
+  expect(context.clearRect).toHaveBeenCalledTimes(2)
+  expect(context.arc).toHaveBeenCalledTimes(1)
+})
+
+test("resuming ignores time spent paused", () => {
   const { context, frame, now, snow } = setupAnimation()
-  snow.stop()
+  snow.paused = true
   now.mockReturnValue(3_600_000)
-  snow.resume()
+  snow.paused = false
   frame(3_600_020)
   expect(context.arc.mock.calls[0][1]).toBeCloseTo(52)
+})
+
+test("draws the first frame without scheduling another when starting paused", () => {
+  const { cancelFrame, context, frame, requestFrame, snow } = setupAnimation({ paused: true })
+  expect(snow.paused).toBe(true)
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(requestFrame).not.toHaveBeenCalled()
+
+  snow.paused = false
+  expect(requestFrame).toHaveBeenCalledTimes(1)
+  frame(20)
+  expect(context.arc.mock.calls[0][1]).toBeCloseTo(52)
+  expect(cancelFrame).not.toHaveBeenCalled()
+})
+
+test("no longer exposes stop or resume", () => {
+  const { snow } = setupAnimation()
+  expect(snow).not.toHaveProperty("stop")
+  expect(snow).not.toHaveProperty("resume")
 })
 
 test("limits movement after a long frame", () => {
@@ -274,7 +305,7 @@ test("limits movement after a long frame", () => {
 
 test("redraws paused flakes without moving them and reuses the context after resizing", () => {
   const { canvas, context, resize, snow } = setupAnimation()
-  snow.stop()
+  snow.paused = true
   context.arc.mockClear()
   snow.draw()
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
@@ -489,12 +520,12 @@ test("starts arrivals after changing stationary settings without prepopulating",
 
 test("does not queue arrivals when density is raised and lowered while paused", () => {
   const { context, frame, snow } = setupAnimation({ density: 0, fillMode: "none" })
-  snow.stop()
+  snow.paused = true
   snow.density = 1000
   snow.draw()
   snow.density = 0
   snow.draw()
-  snow.resume()
+  snow.paused = false
 
   for (let time = 100; time <= 1000; time += 100) {
     frame(time)
@@ -747,7 +778,7 @@ test("prefills the same spatial distribution as incoming flakes", () => {
       return seed / 4_294_967_296
     })
 
-    snow.stop()
+    snow.paused = true
     Object.assign(canvas, { clientWidth: 1000, width: 1000 })
     createSnow(canvas, {
       density: 200,
