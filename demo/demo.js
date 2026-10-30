@@ -1,4 +1,4 @@
-import { snow } from "./snow.js"
+import { snow } from "./dist/snow.js"
 
 const canvas = document.querySelector("#snow-canvas")
 

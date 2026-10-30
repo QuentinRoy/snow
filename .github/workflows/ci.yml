@@ -25,15 +25,30 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           mkdir _site
-          cp -L demo/* _site/
+          cp -RL demo/* _site/
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
           path: _site
 
+  browser:
+    runs-on: ubuntu-latest
+    # The image ships the browsers for exactly this Playwright version, so keep the tag equal to
+    # the version pinned for `playwright` in package.json.
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:browser
+
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: check
+    needs: [check, browser]
     runs-on: ubuntu-latest
     permissions:
       pages: write

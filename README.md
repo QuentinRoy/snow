@@ -1,6 +1,6 @@
 # Snow
 
-A snow animation for the browser, drawn on a canvas. The package includes TypeScript declarations.
+A snow animation for the browser, drawn on a canvas. Use it as a `<snow-fall>` element, or call the `snow()` function on a canvas you manage yourself. The package includes TypeScript declarations.
 
 ## Installation
 
@@ -10,9 +10,110 @@ Add Snow to your application:
 npm install @quentinroy/snow
 ```
 
-## Usage
+## The `<snow-fall>` element
 
-Create a canvas and size it with CSS:
+Import the registration module once, then write the tag:
+
+```js
+import "@quentinroy/snow/element/register"
+```
+
+```html
+<snow-fall flake-color="white" density="60"></snow-fall>
+```
+
+The element draws snow over its own area. It is 300 × 150 pixels unless you say otherwise.
+
+The element entry points need a browser. Import them from client code only, not from code that runs on a server.
+
+### Without a bundler
+
+Load the registration module from jsDelivr as a browser module. Save this as an HTML file and open it in a browser:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Snow</title>
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/npm/@quentinroy/snow/dist/element/register.js"
+    ></script>
+  </head>
+  <body style="background: #172033">
+    <snow-fall width="800" height="600" flake-color="white"></snow-fall>
+  </body>
+</html>
+```
+
+The URL loads the latest published version. For production, [pin a version](https://github.com/jsdelivr/jsdelivr#npm) to avoid unexpected updates.
+
+### Your own tag name
+
+The registration module defines `snow-fall` and throws if another class already uses that name. To pick a different name, or to use a scoped registry, import the class and register it yourself:
+
+```js
+import { SnowElement } from "@quentinroy/snow/element"
+
+customElements.define("falling-snow", SnowElement)
+```
+
+### Attributes and properties
+
+Every attribute has a property with the matching camel-case name, such as `flake-speed-deviation` and `flakeSpeedDeviation`. The two stay in sync, and changes apply while the snow falls. Sizes and speeds use CSS pixels.
+
+| Attribute                   | Default                   | Meaning                                                                                    |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `flake-size`                | `10`                      | Average flake diameter.                                                                    |
+| `flake-size-deviation`      | `2`                       | Standard deviation of flake diameters.                                                     |
+| `flake-speed`               | `150`                     | Average flake speed, in pixels per second.                                                 |
+| `flake-speed-deviation`     | `10`                      | Standard deviation of flake speeds.                                                        |
+| `flake-direction`           | `0`                       | Average direction, in degrees from straight down: 90 is left, 180 is up, and -90 is right. |
+| `flake-direction-deviation` | `5`                       | Standard deviation of flake directions, in degrees.                                        |
+| `flake-color`               | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                        |
+| `density`                   | `30`                      | Target number of flakes per 1,000 × 1,000 pixel area.                                      |
+| `fill-mode`                 | `"instant"`               | `"instant"` fills empty space at once. `"none"` lets flakes drift in from the edges.       |
+| `show-fps`                  | absent                    | Show the frame rate. Present means on.                                                     |
+| `width`                     | `300`                     | Default width, and half of the default aspect ratio. See [Sizing](#sizing).                |
+| `height`                    | `150`                     | Default height, and the other half of the default aspect ratio. See [Sizing](#sizing).     |
+
+A blank, malformed, or non-finite number falls back to the default, as do a negative `density`, `width`, or `height` and an unknown `fill-mode`. `"0"` is a valid value. Removing an attribute restores its default. Setting a property to an invalid value has the same effect, so reading it back gives the default.
+
+Size, speed, direction, and color changes apply to flakes that arrive afterward. Flakes already on screen keep their look until they leave.
+
+### Sizing
+
+Size the element the way you would an `<img>`. The `width` and `height` attributes set its default size and aspect ratio, and CSS overrides them:
+
+```html
+<snow-fall width="800" height="400"></snow-fall>
+
+<!-- 600 pixels wide and 300 pixels tall: CSS wins, and the ratio still follows 2:1. -->
+<snow-fall width="800" height="400" style="width: 600px"></snow-fall>
+```
+
+Size one dimension in CSS and the other follows the aspect ratio. The `width` and `height` properties return the attribute values. To read the displayed size, measure the element, for example with `getBoundingClientRect()`.
+
+The element is `display: inline-block`. The snow follows the displayed size, so a wider element shows a wider area of snow, not larger flakes. The canvas stays sharp on high-density screens and when you move the window between screens.
+
+### Fullscreen overlay
+
+Cover the page with snow that lets clicks through:
+
+```html
+<snow-fall
+  style="position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none"
+></snow-fall>
+```
+
+The element receives pointer events like an `<img>` or `<canvas>` does, so `pointer-events: none` is what lets the page underneath stay clickable. The `width` and `height` are there because the element keeps its aspect ratio, which would otherwise shrink its height when `inset` stretches the width.
+
+The canvas lives in an open shadow root and is hidden from assistive technology.
+
+## The `snow()` function
+
+Use the function when you want to manage the canvas yourself. Create a canvas and size it with CSS:
 
 ```html
 <canvas id="snow-canvas" style="width: 800px; height: 600px"></canvas>
@@ -33,9 +134,9 @@ The options argument is optional. Call `snow(canvas)` to use the defaults.
 
 Snow watches the canvas and sets `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio`, so the drawing stays sharp on high-resolution screens. Don't set them yourself; size the canvas with CSS only. After every resize Snow redraws the frame, even while the animation is paused. Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills the new area at once; with `"none"`, the new area stays empty until flakes drift in. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation.
 
-## Without a bundler
+### Without a bundler
 
-Load Snow directly from jsDelivr using a browser module. Save this as an HTML file and open it in a browser:
+Load `snow()` directly from jsDelivr using a browser module. Save this as an HTML file and open it in a browser:
 
 ```html
 <!doctype html>
@@ -58,7 +159,7 @@ Load Snow directly from jsDelivr using a browser module. Save this as an HTML fi
 
 The URL loads the latest published version. For production, [pin a version](https://github.com/jsdelivr/jsdelivr#npm) to avoid unexpected updates.
 
-## Options
+### Options
 
 All options become mutable properties on the returned animation. Sizes and speeds use CSS pixels.
 
@@ -84,7 +185,7 @@ With `fillMode: "instant"`, flakes cover the canvas before the first frame. Init
 
 With `fillMode: "none"`, the canvas starts empty and flakes arrive through incoming edges at independently randomized times. Slower snow takes longer to establish coverage. Stationary flakes cannot enter through an edge; they appear only through the `"instant"` fill mode. Changing `fillMode` affects future resize areas and does not fill the existing scene.
 
-## Animation controls
+### Animation controls
 
 ```js
 // Change the snowfall while it runs.
@@ -128,7 +229,7 @@ cd snow
 vp install
 ```
 
-Run commands from the repository root. The library source is in [`src/snow.ts`](src/snow.ts), its tests are in [`src/snow.test.js`](src/snow.test.js), and the interactive demo is in [`demo/`](demo/).
+Run commands from the repository root. The core is in [`src/snow.ts`](src/snow.ts) with tests in [`src/snow.test.js`](src/snow.test.js), which run in Node. The element is in [`src/element.ts`](src/element.ts) with tests in `src/*.browser.test.ts`, which run in Chromium through Playwright. Install the browser once with `vp exec playwright install chromium`. Continuous integration runs them in Playwright's container image instead, so its tag must match the pinned `playwright` version. The interactive demo is in [`demo/`](demo/).
 
 To work on the demo, start the library build in one terminal:
 
@@ -144,19 +245,20 @@ vp dev --open /demo/
 
 The demo loads the built library from `dist/`. The build watcher rebuilds it when the source changes. If you start the server before the first build finishes and see an import error, restart the server after the build completes.
 
-| Command           | Purpose                                                                     |
-| ----------------- | --------------------------------------------------------------------------- |
-| `vp check`        | Check formatting, lint rules, and TypeScript types.                         |
-| `vp lint`         | Run the linter, including type checks.                                      |
-| `vp fmt`          | Format the repository's files.                                              |
-| `vp test`         | Run the tests once.                                                         |
-| `vp test --watch` | Rerun tests as files change.                                                |
-| `vp pack`         | Build the library and TypeScript declarations in `dist/`, with source maps. |
+| Command             | Purpose                                                                     |
+| ------------------- | --------------------------------------------------------------------------- |
+| `vp check`          | Check formatting, lint rules, and TypeScript types.                         |
+| `vp lint`           | Run the linter, including type checks.                                      |
+| `vp fmt`            | Format the repository's files.                                              |
+| `pnpm test`         | Run the core tests once, in Node.                                           |
+| `pnpm test:browser` | Run the element tests once, in Chromium.                                    |
+| `vp pack`           | Build the library and TypeScript declarations in `dist/`, with source maps. |
 
 Before submitting a change, run:
 
 ```sh
-vp test
+pnpm test
+pnpm test:browser
 vp pack
 vp check
 ```
