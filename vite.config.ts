@@ -6,6 +6,18 @@ import { playwright } from "vite-plus/test/browser-playwright"
 
 const tsdoc = selectJsPlugins(["tsdoc"])
 
+function relativeImports(extension: "ts" | "js") {
+  return {
+    patterns: [
+      {
+        caseSensitive: true,
+        group: ["./**", "../**", `!**/*.${extension}`],
+        message: `Use .${extension} extensions for relative imports.`,
+      },
+    ],
+  }
+}
+
 export default defineConfig({
   fmt: { semi: false },
   lint: {
@@ -26,18 +38,7 @@ export default defineConfig({
       {
         files: ["demo/demo.js"],
         rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              patterns: [
-                {
-                  caseSensitive: true,
-                  group: ["./**", "../**", "!**/*.js"],
-                  message: "Use .js extensions when importing built files in the demo.",
-                },
-              ],
-            },
-          ],
+          "no-restricted-imports": ["error", relativeImports("js")],
           "typescript/no-unsafe-assignment": "off",
           "typescript/no-unsafe-member-access": "off",
         },
@@ -45,18 +46,7 @@ export default defineConfig({
     ],
     rules: {
       "func-style": ["error", "declaration", { allowArrowFunctions: true }],
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              caseSensitive: true,
-              group: ["./**", "../**", "!**/*.ts"],
-              message: "Use .ts extensions for relative source imports.",
-            },
-          ],
-        },
-      ],
+      "no-restricted-imports": ["error", relativeImports("ts")],
     },
   },
   pack: {
