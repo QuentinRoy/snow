@@ -1,4 +1,5 @@
 import { createArrivals } from "./arrivals"
+import { defaultSettings } from "./defaults"
 import { SnowFlake } from "./snow-flake"
 
 /** How empty space gets filled. */
@@ -63,20 +64,6 @@ export interface CanvasSize {
 interface ExposedArea extends CanvasSize {
   overlapWidth: number
   overlapHeight: number
-}
-
-const defaultOptions: SnowSettings = {
-  flakeSize: 10,
-  flakeSizeDeviation: 2,
-  flakeSpeed: 150,
-  flakeSpeedDeviation: 10,
-  flakeDirection: 0,
-  flakeDirectionDeviation: 5,
-  flakeColor: "rgba(255,255,255,0.9)",
-  density: 30,
-  fillMode: "instant",
-  showFps: false,
-  paused: false,
 }
 
 const numericSettingKeys = [
@@ -213,11 +200,11 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
       throw new RangeError("density produces too many snowflakes")
     }
 
-    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
-
     if (nextWidth === width && nextHeight === height) {
       return
     }
+
+    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
 
     // Preserve the shared region; only newly exposed space needs immediate filling.
     const exposedCount = animation.fillMode === "instant" ? count - overlapCount : 0
@@ -315,6 +302,13 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     animationFrameId = requestAnimationFrame(loop)
   }
 
+  const stopFrames = (): void => {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId)
+      animationFrameId = null
+    }
+  }
+
   const resizeObserver = new ResizeObserver((entries) => {
     // A canvas off the page reports an empty size, which would drop every flake.
     if (isDisposed || !canvas.isConnected) {
@@ -327,7 +321,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   })
 
   const animation: SnowAnimation = {
-    ...defaultOptions,
+    ...defaultSettings,
     ...options,
     get paused() {
       return isPaused
@@ -340,10 +334,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
       isPaused = value
 
       if (value) {
-        if (animationFrameId !== null) {
-          cancelAnimationFrame(animationFrameId)
-          animationFrameId = null
-        }
+        stopFrames()
       } else {
         startFrames()
       }
@@ -355,11 +346,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
 
       isDisposed = true
       resizeObserver.disconnect()
-
-      if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId)
-        animationFrameId = null
-      }
+      stopFrames()
 
       context.clearRect(0, 0, canvas.width, canvas.height)
     },

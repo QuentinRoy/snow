@@ -6,6 +6,7 @@ import {
   string,
 } from "@quentinroy/custom-element-mixins"
 import type { AttributeSerializer } from "@quentinroy/custom-element-mixins"
+import { defaultSettings } from "./defaults"
 import { snow } from "./snow"
 import type { SnowAnimation, SnowOptions } from "./snow"
 
@@ -49,15 +50,15 @@ const optionNames = [
 const elementOnlyNames = ["height", "ignoreReducedMotion", "paused", "width"] as const
 
 const SnowElementBase = WithAttributeProps(HTMLElement, {
-  density: nonNegativeNumber(30),
-  fillMode: pickList({ default: "instant", values: ["instant", "none"] }),
-  flakeColor: string({ default: "rgba(255,255,255,0.9)" }),
-  flakeDirection: finiteNumber(0),
-  flakeDirectionDeviation: finiteNumber(5),
-  flakeSize: finiteNumber(10),
-  flakeSizeDeviation: finiteNumber(2),
-  flakeSpeed: finiteNumber(150),
-  flakeSpeedDeviation: finiteNumber(10),
+  density: nonNegativeNumber(defaultSettings.density),
+  fillMode: pickList({ default: defaultSettings.fillMode, values: ["instant", "none"] }),
+  flakeColor: string({ default: defaultSettings.flakeColor }),
+  flakeDirection: finiteNumber(defaultSettings.flakeDirection),
+  flakeDirectionDeviation: finiteNumber(defaultSettings.flakeDirectionDeviation),
+  flakeSize: finiteNumber(defaultSettings.flakeSize),
+  flakeSizeDeviation: finiteNumber(defaultSettings.flakeSizeDeviation),
+  flakeSpeed: finiteNumber(defaultSettings.flakeSpeed),
+  flakeSpeedDeviation: finiteNumber(defaultSettings.flakeSpeedDeviation),
   height: nonNegativeNumber(defaultHeight),
   ignoreReducedMotion: boolean(),
   paused: boolean(),

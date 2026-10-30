@@ -8,71 +8,56 @@ const animation = snow(canvas)
 window.snow = animation
 
 const controls = document.querySelector("#controls")
-const closeButton = controls.querySelector(".close-button")
 
 function closeControls() {
   controls.classList.add("hidden")
 }
 
-function openControls() {
-  controls.classList.remove("hidden")
-}
-
-function areControlsHidden() {
-  return controls.classList.contains("hidden")
-}
-
-closeButton.addEventListener("click", () => {
-  if (areControlsHidden()) {
-    openControls()
-  } else {
-    closeControls()
-  }
-})
+controls.querySelector(".close-button").addEventListener("click", closeControls)
 
 controls.addEventListener(
   "click",
   (event) => {
-    if (areControlsHidden()) {
-      openControls()
+    if (controls.classList.contains("hidden")) {
+      controls.classList.remove("hidden")
       event.stopPropagation()
     }
   },
-  // Capture first so opening the controls does not immediately close them.
+  // Capture first so a click on the hidden controls only opens them, even on the close button.
   { capture: true },
 )
 
 for (const input of document.querySelectorAll("#controls > .control > input")) {
   switch (input.id) {
     case "flakeColor": {
-      input.value = window.snow[input.id]
+      input.value = animation.flakeColor
       input.addEventListener("change", () => {
-        window.snow[input.id] = input.value
+        animation.flakeColor = input.value
       })
       break
     }
 
     case "fillMode": {
-      input.checked = window.snow.fillMode === "instant"
+      input.checked = animation.fillMode === "instant"
       input.addEventListener("change", () => {
-        window.snow.fillMode = input.checked === true ? "instant" : "none"
+        animation.fillMode = input.checked === true ? "instant" : "none"
       })
       break
     }
 
     case "paused":
     case "showFps": {
-      input.checked = window.snow[input.id]
+      input.checked = animation[input.id]
       input.addEventListener("change", () => {
-        window.snow[input.id] = input.checked
+        animation[input.id] = input.checked
       })
       break
     }
 
     default: {
-      input.value = window.snow[input.id]
+      input.value = animation[input.id]
       input.addEventListener("change", () => {
-        window.snow[input.id] = +input.value
+        animation[input.id] = Number(input.value)
       })
       break
     }
