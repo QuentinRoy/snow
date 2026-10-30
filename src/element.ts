@@ -1,10 +1,4 @@
-import {
-  WithAttributeProps,
-  boolean,
-  number,
-  pickList,
-  string,
-} from "@quentinroy/custom-element-mixins"
+import { WithAttributeProps, boolean } from "@quentinroy/custom-element-mixins"
 import type { AttributeSerializer } from "@quentinroy/custom-element-mixins"
 import { defaultSettings } from "./defaults"
 import { snow } from "./snow"
@@ -13,12 +7,60 @@ import type { SnowAnimation, SnowOptions } from "./snow"
 const defaultWidth = 300
 const defaultHeight = 150
 
-/** A finite number; blank, malformed and non-finite attributes fall back to the default. */
-function finiteNumber(fallback: number): AttributeSerializer<unknown, number> {
-  return number({ default: fallback, finite: true, rejectEmpty: true })
+function dimension(fallback: number): AttributeSerializer<unknown, number> {
+  return {
+    parse(value) {
+      const match = /^[\t\n\f\r ]*(?<number>[+-]?\d+)/u.exec(value ?? "")
+      const parsed = match ? Number(match.groups?.number) : Number.NaN
+
+      return parsed >= 0 && parsed <= 2_147_483_647 ? parsed || 0 : fallback
+    },
+    serialize(value) {
+      const number = toNumber(value)
+      const integer = Number.isFinite(number) ? Math.trunc(number) : 0
+      const converted = ((integer % 4_294_967_296) + 4_294_967_296) % 4_294_967_296
+
+      return String(converted > 2_147_483_647 ? fallback : converted)
+    },
+  }
 }
 
-/** Like `finiteNumber`, but negative values fall back to the default too. */
+/** A finite number; blank, malformed and non-finite attributes fall back to the default. */
+function finiteNumber(fallback: number): AttributeSerializer<unknown, number> {
+  return {
+    parse(value) {
+      const match = /^[\t\n\f\r ]*(?<number>[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/u.exec(
+        value ?? "",
+      )
+
+      const parsed = match ? Number(match.groups?.number) : Number.NaN
+
+      return Number.isFinite(parsed) ? parsed || 0 : fallback
+    },
+    serialize(value) {
+      const converted = toNumber(value)
+
+      if (!Number.isFinite(converted)) {
+        throw new TypeError("The value must be finite.")
+      }
+
+      return String(converted)
+    },
+  }
+}
+
+function toNumber(value: number): number {
+  // Unary plus uses Web IDL's ToNumber conversion, which rejects BigInt.
+  // eslint-disable-next-line typescript/no-unnecessary-type-conversion
+  return +value
+}
+
+function toDOMString(value: string): string {
+  // eslint-disable-next-line typescript/no-unnecessary-template-expression
+  return `${value}`
+}
+
+/** Like `finiteNumber`, but negative values read as zero. */
 function nonNegativeNumber(fallback: number): AttributeSerializer<unknown, number> {
   const { parse, serialize } = finiteNumber(fallback)
 
@@ -26,7 +68,7 @@ function nonNegativeNumber(fallback: number): AttributeSerializer<unknown, numbe
     parse(value) {
       const parsed = parse.call(this, value)
 
-      return parsed < 0 ? fallback : parsed
+      return Math.max(0, parsed)
     },
     serialize,
   }
@@ -51,19 +93,29 @@ const elementOnlyNames = ["height", "ignoreReducedMotion", "paused", "width"] as
 
 const SnowElementBase = WithAttributeProps(HTMLElement, {
   density: nonNegativeNumber(defaultSettings.density),
-  fillMode: pickList({ default: defaultSettings.fillMode, values: ["instant", "none"] }),
-  flakeColor: string({ default: defaultSettings.flakeColor }),
+  fillMode: {
+    parse(value: string | undefined): "instant" | "none" {
+      return value?.length === 4 && /^none$/iu.test(value) ? "none" : "instant"
+    },
+    serialize(value: "instant" | "none"): string {
+      return toDOMString(value)
+    },
+  },
+  flakeColor: {
+    parse: (value: string | undefined): string => value ?? "",
+    serialize: toDOMString,
+  },
   flakeDirection: finiteNumber(defaultSettings.flakeDirection),
   flakeDirectionDeviation: finiteNumber(defaultSettings.flakeDirectionDeviation),
   flakeSize: finiteNumber(defaultSettings.flakeSize),
   flakeSizeDeviation: finiteNumber(defaultSettings.flakeSizeDeviation),
   flakeSpeed: finiteNumber(defaultSettings.flakeSpeed),
   flakeSpeedDeviation: finiteNumber(defaultSettings.flakeSpeedDeviation),
-  height: nonNegativeNumber(defaultHeight),
+  height: dimension(defaultHeight),
   ignoreReducedMotion: boolean(),
   paused: boolean(),
   showFps: boolean(),
-  width: nonNegativeNumber(defaultWidth),
+  width: dimension(defaultWidth),
 })
 
 /** Snowfall drawn on a canvas inside an open shadow root. */
@@ -110,7 +162,10 @@ export class SnowElement extends SnowElementBase {
   }
 
   #readOptions(): SnowOptions {
-    return Object.fromEntries(optionNames.map((name) => [name, this[name]]))
+    return {
+      ...Object.fromEntries(optionNames.map((name) => [name, this[name]])),
+      flakeColor: this.hasAttribute("flake-color") ? this.flakeColor : defaultSettings.flakeColor,
+    }
   }
 
   #syncAnimation(): void {

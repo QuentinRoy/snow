@@ -185,7 +185,7 @@ test("sizes the canvas bitmap from the displayed size", async () => {
 const defaults = {
   density: 30,
   fillMode: "instant",
-  flakeColor: "rgba(255,255,255,0.9)",
+  flakeColor: "",
   flakeDirection: 0,
   flakeDirectionDeviation: 5,
   flakeSize: 10,
@@ -312,6 +312,82 @@ test("writes properties back to attributes", () => {
   expect(element.hasAttribute("show-fps")).toBe(false)
 })
 
+test("reflects dimensions like canvas", () => {
+  const element = mount()
+  const canvas = document.createElement("canvas")
+
+  for (const value of ["", "  +12px", "0x10", "-0", "-1", "2147483648", "12.9", "\u00A012"]) {
+    element.setAttribute("width", value)
+    canvas.setAttribute("width", value)
+    expect(element.width, value).toBe(canvas.width)
+    expect(element.getAttribute("width")).toBe(value)
+  }
+
+  for (const value of [12.9, -1, 4_294_967_301, Number.NaN]) {
+    element.width = value
+    canvas.width = value
+    expect(element.width).toBe(canvas.width)
+    expect(element.getAttribute("width")).toBe(canvas.getAttribute("width"))
+  }
+
+  for (const value of [1n, Symbol("test")]) {
+    expect(() => Reflect.set(element, "width", value)).toThrow(TypeError)
+    expect(element.getAttribute("width")).toBe(canvas.getAttribute("width"))
+  }
+})
+
+test("parses floating-point prefixes and converts finite property assignments", () => {
+  const element = mount()
+
+  for (const [text, expected] of [
+    ["  -1.5e2px", -150],
+    ["0x10", 0],
+    ["1e+", 1],
+    ["+1", 1],
+    ["\u00A01", 10],
+    ["1e999", 10],
+  ] as const) {
+    element.setAttribute("flake-size", text)
+    expect(element.flakeSize, text).toBe(expected)
+    expect(element.getAttribute("flake-size")).toBe(text)
+  }
+
+  for (const value of ["2.5", null, -0]) {
+    Reflect.set(element, "flakeSize", value)
+    expect(element.flakeSize).toBe(Number(value) || 0)
+  }
+
+  for (const value of [undefined, Number.NaN, Infinity, -Infinity, 1n, Symbol("test")]) {
+    expect(() => Reflect.set(element, "flakeSize", value)).toThrow(TypeError)
+    expect(element.getAttribute("flake-size")).toBe("0")
+  }
+})
+
+test("converts double assignments like a native meter", () => {
+  const element = mount()
+  const meter = document.createElement("meter")
+
+  for (const value of [12.5, "2.5", null, -0, undefined, Infinity, 1n, Symbol("test")]) {
+    let snowError: unknown
+    let meterError: unknown
+
+    try {
+      Reflect.set(element, "flakeSize", value)
+    } catch (error) {
+      snowError = error
+    }
+
+    try {
+      Reflect.set(meter, "value", value)
+    } catch (error) {
+      meterError = error
+    }
+
+    expect(snowError instanceof TypeError).toBe(meterError instanceof TypeError)
+    expect(element.getAttribute("flake-size")).toBe(meter.getAttribute("value"))
+  }
+})
+
 test("restores the default when an attribute is removed", () => {
   const element = mount()
 
@@ -323,7 +399,7 @@ test("restores the default when an attribute is removed", () => {
   }
 })
 
-test.each(["", "  ", "abc", "1x", "Infinity", "-Infinity", "NaN", "1e999"])(
+test.each(["", "  ", "abc", "Infinity", "-Infinity", "NaN"])(
   "falls back to the default for the numeric value %j",
   (value) => {
     const element = mount()
@@ -344,10 +420,16 @@ test("keeps an explicit zero", () => {
   }
 })
 
-test("falls back to the default for negative density, width and height", () => {
+test("clamps negative density and defaults negative dimensions without changing attributes", () => {
   const element = mount({ density: "-1", height: "-1", width: "-1" })
 
-  expect(element).toMatchObject({ density: 30, height: 150, width: 300 })
+  expect(element).toMatchObject({ density: 0, height: 150, width: 300 })
+  expect(element.getAttribute("density")).toBe("-1")
+  element.density = -2
+  expect(element.density).toBe(0)
+  expect(element.getAttribute("density")).toBe("-2")
+  element.removeAttribute("density")
+  expect(element.density).toBe(30)
 })
 
 test("accepts negative directions", () => {
@@ -356,6 +438,53 @@ test("accepts negative directions", () => {
 
 test("falls back to instant for an unknown fill mode", () => {
   expect(mount({ "fill-mode": "fade" }).fillMode).toBe("instant")
+})
+
+test("reflects strings and canonicalizes fill mode without changing markup", () => {
+  const element = mount()
+
+  for (const [value, expected] of [
+    ["NoNe", "none"],
+    ["INSTANT", "instant"],
+    [" none ", "instant"],
+    ["", "instant"],
+  ] as const) {
+    element.setAttribute("fill-mode", value)
+    expect(element.fillMode).toBe(expected)
+    expect(element.getAttribute("fill-mode")).toBe(value)
+  }
+
+  for (const value of [null, undefined, 42]) {
+    Reflect.set(element, "flakeColor", value)
+    expect(element.flakeColor).toBe(String(value))
+    Reflect.set(element, "fillMode", value)
+    expect(element.getAttribute("fill-mode")).toBe(String(value))
+  }
+
+  for (const name of ["flakeColor", "fillMode"]) {
+    const before = element.getAttribute(name === "flakeColor" ? "flake-color" : "fill-mode")
+    expect(() => Reflect.set(element, name, Symbol("test"))).toThrow(TypeError)
+    expect(element.getAttribute(name === "flakeColor" ? "flake-color" : "fill-mode")).toBe(before)
+  }
+
+  element.removeAttribute("flake-color")
+  expect(element.flakeColor).toBe("")
+})
+
+test("reflects boolean attributes by presence and property truthiness", () => {
+  const element = mount({ paused: "false", "show-fps": "false", "ignore-reduced-motion": "false" })
+
+  for (const [name, attribute] of [
+    ["paused", "paused"],
+    ["showFps", "show-fps"],
+    ["ignoreReducedMotion", "ignore-reduced-motion"],
+  ] as const) {
+    expect(element[name]).toBe(true)
+    Reflect.set(element, name, 0)
+    expect(element.hasAttribute(attribute)).toBe(false)
+    Reflect.set(element, name, "false")
+    expect(element.getAttribute(attribute)).toBe("")
+  }
 })
 
 const bigSnow = { height: "1000", width: "1000" }
@@ -468,13 +597,16 @@ test("fills new space instantly only when the fill mode is instant", async () =>
   expect(drawing.lastFrame().arcs.length).toBeGreaterThan(initial * 2)
 })
 
-test("reads an invalid property value back as the default", () => {
-  const element = mount()
-  element.flakeSize = Number.NaN
-  element.density = -5
-  Reflect.set(element, "fillMode", "fade")
-
-  expect(element).toMatchObject({ density: 30, fillMode: "instant", flakeSize: 10 })
+test("restores the rendering color when the attribute is removed", () => {
+  const drawing = stubDrawing()
+  const element = mount({ ...bigSnow, "flake-color": "red", "flake-speed": "500" })
+  element.removeAttribute("flake-color")
+  drawing.advance(turnover.milliseconds, turnover.count)
+  expect(element.flakeColor).toBe("")
+  expect(drawing.lastFrame().arcs.length).toBeGreaterThan(0)
+  expect(new Set(drawing.lastFrame().arcs.map((arc) => arc.color))).toEqual(
+    new Set(["rgba(255, 255, 255, 0.9)"]),
+  )
 })
 
 async function emulateReducedMotion(reduce: boolean): Promise<void> {
