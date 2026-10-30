@@ -74,6 +74,8 @@ Every attribute has a property with the matching camel-case name, such as `flake
 | `flake-color`               | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                        |
 | `density`                   | `30`                      | Target number of flakes per 1,000 × 1,000 pixel area.                                      |
 | `fill-mode`                 | `"instant"`               | `"instant"` fills empty space at once. `"none"` lets flakes drift in from the edges.       |
+| `paused`                    | absent                    | Stop the animation while keeping the current frame. Present means paused.                  |
+| `ignore-reduced-motion`     | absent                    | Keep animating when the system asks for reduced motion. Present means on.                  |
 | `show-fps`                  | absent                    | Show the frame rate. Present means on.                                                     |
 | `width`                     | `300`                     | Default width, and half of the default aspect ratio. See [Sizing](#sizing).                |
 | `height`                    | `150`                     | Default height, and the other half of the default aspect ratio. See [Sizing](#sizing).     |
@@ -85,6 +87,16 @@ Property assignments follow [Web IDL conversion](https://webidl.spec.whatwg.org/
 `fill-mode` matches `instant` and `none` without regard to ASCII letter case; whitespace and unknown values select `instant`. String properties use DOMString conversion. Missing `flake-color` reads as an empty string, while the animation uses its default color; an explicitly empty attribute is distinct. Boolean attributes are true whenever present, even with the value `"false"`; property assignments use JavaScript truthiness. Removing an attribute restores its missing-value behavior. These reflection rules follow [HTML](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflect), with Snow's stated defaults and density bound.
 
 Size, speed, direction, and color changes apply to flakes that arrive afterward. Flakes already on screen keep their look until they leave.
+
+### Pausing and reduced motion
+
+Add `paused` to freeze the snow on its current frame, and remove it to continue from there. The `paused` property does the same: `element.paused = true` adds the attribute and `false` removes it.
+
+```html
+<snow-fall paused></snow-fall>
+```
+
+The element also stops when the system asks for reduced motion, and starts again as soon as that setting is turned off. This doesn't change `paused`, which always reflects what you set. Add `ignore-reduced-motion` (or set `ignoreReducedMotion`) to keep the snow falling in spite of the setting. `paused` still wins: a paused element stays still.
 
 Taking the element out of the page stops its animation. Putting it back continues with the same flakes, and the time it spent away doesn't move them.
 
@@ -175,18 +187,19 @@ The URL loads the latest published version. For production, [pin a version](http
 
 All options become mutable properties on the returned animation. Sizes and speeds use CSS pixels.
 
-| Option                    | Default                   | Meaning                                                                                            |
-| ------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `flakeSize`               | `10`                      | Average flake diameter, in pixels.                                                                 |
-| `flakeSizeDeviation`      | `2`                       | Standard deviation of flake diameters, in pixels.                                                  |
-| `flakeSpeed`              | `150`                     | Average flake speed, in pixels per second.                                                         |
-| `flakeSpeedDeviation`     | `10`                      | Standard deviation of flake speeds, in pixels per second.                                          |
-| `flakeDirection`          | `0`                       | Average direction, in degrees from vertically downward: 90 is left, 180 is up, and -90 is right.   |
-| `flakeDirectionDeviation` | `5`                       | Standard deviation of flake directions, in degrees.                                                |
-| `flakeColor`              | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                                |
-| `density`                 | `30`                      | Target number of snowflakes per 1,000 × 1,000 CSS-pixel area.                                      |
-| `fillMode`                | `"instant"`               | `"instant"` fills the canvas at startup and newly exposed areas after resizing. `"none"` does not. |
-| `showFps`                 | `false`                   | Show the frame rate on the canvas.                                                                 |
+| Option                    | Default                   | Meaning                                                                                                |
+| ------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `flakeSize`               | `10`                      | Average flake diameter, in pixels.                                                                     |
+| `flakeSizeDeviation`      | `2`                       | Standard deviation of flake diameters, in pixels.                                                      |
+| `flakeSpeed`              | `150`                     | Average flake speed, in pixels per second.                                                             |
+| `flakeSpeedDeviation`     | `10`                      | Standard deviation of flake speeds, in pixels per second.                                              |
+| `flakeDirection`          | `0`                       | Average direction, in degrees from vertically downward: 90 is left, 180 is up, and -90 is right.       |
+| `flakeDirectionDeviation` | `5`                       | Standard deviation of flake directions, in degrees.                                                    |
+| `flakeColor`              | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                                    |
+| `density`                 | `30`                      | Target number of snowflakes per 1,000 × 1,000 CSS-pixel area.                                          |
+| `fillMode`                | `"instant"`               | `"instant"` fills the canvas at startup and newly exposed areas after resizing. `"none"` does not.     |
+| `showFps`                 | `false`                   | Show the frame rate on the canvas.                                                                     |
+| `paused`                  | `false`                   | Start without scheduling frames. Snow still draws the first frame. Change it later to pause or resume. |
 
 Density describes average coverage: `density: 30` gives an average of 30 flakes on a 1,000 × 1,000 canvas and 120 on a 2,000 × 2,000 canvas. The visible count fluctuates naturally. Density must be finite and nonnegative. Increasing it increases incoming snowfall; decreasing it reduces new arrivals while existing flakes leave. Setting it to `0` stops arrivals and lets the snow leave naturally.
 

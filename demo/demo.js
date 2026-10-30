@@ -43,6 +43,7 @@ for (const input of document.querySelectorAll("#controls > .control > input")) {
       break
     }
 
+    case "paused":
     case "showFps": {
       input.checked = snowfall[input.id]
       input.addEventListener("change", () => {
