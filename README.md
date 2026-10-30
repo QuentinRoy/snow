@@ -101,11 +101,21 @@ animation.paused = false
 
 Size, speed, direction, and color changes apply to new arrivals. Visible flakes keep their attributes until they leave. Arrival timing is independent of departures: reducing density does not pause arrivals until the count falls below a quota. Changing a parameter never fills or clears the visible scene immediately, regardless of `fillMode`. Stationary flakes stay where they are, including when density is set to `0`. The frame-rate display changes on the next frame.
 
-Set `animation.paused = true` before removing the canvas to stop scheduling frames. To also erase the paused frame, clear the canvas yourself:
+## Stopping for good
+
+Call `dispose()` when you no longer need the animation, for example before removing the canvas. It cancels the scheduled frame, stops watching the canvas, and clears it. After that, a second `dispose()`, changing `paused`, and resizing the canvas do nothing.
 
 ```js
-animation.paused = true
-canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height)
+animation.dispose()
+```
+
+Where the runtime supports explicit resource management, declare the animation with `using` and it disposes itself when the scope ends. `[Symbol.dispose]` does the same as `dispose()`. Runtimes without `Symbol.dispose` skip it and still work with `dispose()`.
+
+```js
+{
+  using animation = snow(canvas)
+  // ...
+} // Disposed here.
 ```
 
 ## Development

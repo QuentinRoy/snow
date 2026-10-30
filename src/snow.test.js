@@ -948,3 +948,57 @@ test("rejects an overflowing arrival rate before entering the sampling loop", ()
     frame(100)
   }).toThrow("Snowfall arrival rate must be finite")
 })
+
+test("disposing stops the frame, stops watching the canvas and clears it", () => {
+  const { cancelFrame, context, observers, snow } = setupAnimation()
+  snow.dispose()
+  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+})
+
+test("disposing a paused animation does not cancel a frame", () => {
+  const { cancelFrame, context, snow } = setupAnimation({ paused: true })
+  snow.dispose()
+  expect(cancelFrame).not.toHaveBeenCalled()
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+})
+
+test("does nothing after disposal", () => {
+  const { cancelFrame, context, observers, requestFrame, resize, snow } = setupAnimation()
+  snow.dispose()
+  context.clearRect.mockClear()
+  requestFrame.mockClear()
+  cancelFrame.mockClear()
+
+  expect(() => {
+    snow.dispose()
+    snow.paused = false
+    snow.paused = true
+    snow.paused = false
+    resize(200, 200)
+  }).not.toThrow()
+
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+  expect(requestFrame).not.toHaveBeenCalled()
+  expect(cancelFrame).not.toHaveBeenCalled()
+  expect(context.clearRect).not.toHaveBeenCalled()
+  expect(context.arc).not.toHaveBeenCalled()
+})
+
+test("disposes through Symbol.dispose", () => {
+  const { cancelFrame, observers, snow } = setupAnimation()
+  snow[Symbol.dispose]()
+  expect(cancelFrame).toHaveBeenCalledTimes(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+})
+
+test("creates an animation where the runtime has no Symbol.dispose", () => {
+  // `Symbol.dispose` is read-only, so shadow it on an object that inherits everything else.
+  vi.stubGlobal("Symbol", Object.create(Symbol, { dispose: { value: undefined } }))
+
+  const { snow } = setupAnimation()
+  expect(() => {
+    snow.dispose()
+  }).not.toThrow()
+})

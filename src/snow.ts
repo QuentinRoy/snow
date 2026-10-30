@@ -4,8 +4,8 @@ import { SnowFlake } from "./snow-flake"
 /** How empty space gets filled. */
 export type FillMode = "instant" | "none"
 
-/** Controls and mutable settings for a snow animation. */
-export interface SnowAnimation {
+/** Mutable settings for a snow animation. */
+export interface SnowSettings {
   /**
    * Stop scheduling frames while keeping the current frame visible. Setting it back to `false`
    * continues from the same flake positions and ignores the time spent paused.
@@ -39,8 +39,16 @@ export interface SnowAnimation {
   showFps: boolean
 }
 
-/** Current appearance, motion, and density settings. */
-export type SnowSettings = SnowAnimation
+/** A running snow animation: its settings, plus teardown. */
+export interface SnowAnimation extends SnowSettings {
+  /**
+   * Stop the animation for good: cancel the scheduled frame, stop watching the canvas, and clear
+   * it. Later calls and `paused` changes do nothing.
+   */
+  dispose: () => void
+  /** Same as `dispose()`, so `using animation = snow(canvas)` disposes at the end of the scope. */
+  [Symbol.dispose]?: () => void
+}
 
 /** Settings that override the defaults at startup. */
 export type SnowOptions = Partial<SnowSettings>
@@ -300,11 +308,22 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   }
 
   let isPaused = options?.paused ?? false
+  let isDisposed = false
 
   const startFrames = (): void => {
     lastFrameTime = performance.now()
     animationFrameId = requestAnimationFrame(loop)
   }
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    if (isDisposed) {
+      return
+    }
+
+    for (const { contentRect, devicePixelContentBoxSize } of entries) {
+      resize(contentRect.width, contentRect.height, devicePixelContentBoxSize?.[0])
+    }
+  })
 
   const animation: SnowAnimation = {
     ...defaultOptions,
@@ -313,7 +332,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
       return isPaused
     },
     set paused(value) {
-      if (value === isPaused) {
+      if (isDisposed || value === isPaused) {
         return
       }
 
@@ -328,15 +347,29 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
         startFrames()
       }
     },
+    dispose: () => {
+      if (isDisposed) {
+        return
+      }
+
+      isDisposed = true
+      resizeObserver.disconnect()
+
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+      }
+
+      context.clearRect(0, 0, canvas.width, canvas.height)
+    },
+  }
+
+  // `Symbol.dispose` is missing from some runtimes, and the build targets ES2020.
+  if ("dispose" in Symbol) {
+    animation[Symbol.dispose] = animation.dispose
   }
 
   resize(canvas.clientWidth, canvas.clientHeight)
-
-  const resizeObserver = new ResizeObserver((entries) => {
-    for (const { contentRect, devicePixelContentBoxSize } of entries) {
-      resize(contentRect.width, contentRect.height, devicePixelContentBoxSize?.[0])
-    }
-  })
 
   try {
     // Device-pixel boxes also report a change of `devicePixelRatio` alone, such as a zoom or a move
