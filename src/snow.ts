@@ -316,7 +316,8 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   }
 
   const resizeObserver = new ResizeObserver((entries) => {
-    if (isDisposed) {
+    // A canvas off the page reports an empty size, which would drop every flake.
+    if (isDisposed || !canvas.isConnected) {
       return
     }
 

@@ -74,6 +74,8 @@ Every attribute has a property with the matching camel-case name, such as `flake
 | `flake-color`               | `"rgba(255,255,255,0.9)"` | Flake color, as a CSS color string.                                                        |
 | `density`                   | `30`                      | Target number of flakes per 1,000 × 1,000 pixel area.                                      |
 | `fill-mode`                 | `"instant"`               | `"instant"` fills empty space at once. `"none"` lets flakes drift in from the edges.       |
+| `paused`                    | absent                    | Stop the animation while keeping the current frame. Present means paused.                  |
+| `ignore-reduced-motion`     | absent                    | Keep animating when the system asks for reduced motion. Present means on.                  |
 | `show-fps`                  | absent                    | Show the frame rate. Present means on.                                                     |
 | `width`                     | `300`                     | Default width, and half of the default aspect ratio. See [Sizing](#sizing).                |
 | `height`                    | `150`                     | Default height, and the other half of the default aspect ratio. See [Sizing](#sizing).     |
@@ -81,6 +83,18 @@ Every attribute has a property with the matching camel-case name, such as `flake
 A blank, malformed, or non-finite number falls back to the default, as do a negative `density`, `width`, or `height` and an unknown `fill-mode`. `"0"` is a valid value. Removing an attribute restores its default. Setting a property to an invalid value has the same effect, so reading it back gives the default.
 
 Size, speed, direction, and color changes apply to flakes that arrive afterward. Flakes already on screen keep their look until they leave.
+
+### Pausing and reduced motion
+
+Add `paused` to freeze the snow on its current frame, and remove it to continue from there. The `paused` property does the same: `element.paused = true` adds the attribute and `false` removes it.
+
+```html
+<snow-fall paused></snow-fall>
+```
+
+The element also stops when the system asks for reduced motion, and starts again as soon as that setting is turned off. This doesn't change `paused`, which always reflects what you set. Add `ignore-reduced-motion` (or set `ignoreReducedMotion`) to keep the snow falling in spite of the setting. `paused` still wins: a paused element stays still.
+
+Taking the element out of the page stops its animation. Putting it back continues with the same flakes, and the time it spent away doesn't move them.
 
 ### Sizing
 

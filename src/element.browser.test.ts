@@ -1,9 +1,12 @@
+/// <reference types="@vitest/browser-playwright" />
 import { afterEach, expect, test, vi } from "vite-plus/test"
+import { cdp } from "vite-plus/test/browser"
 import { SnowElement } from "./element"
 
 customElements.define("test-snow", SnowElement)
 
-afterEach(() => {
+afterEach(async () => {
+  await emulateReducedMotion(false)
   document.body.replaceChildren()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -65,7 +68,9 @@ function stubDrawing(): Drawing {
 
     return 1
   })
-  vi.stubGlobal("cancelAnimationFrame", () => {})
+  vi.stubGlobal("cancelAnimationFrame", () => {
+    nextFrame = undefined
+  })
 
   return {
     advance(milliseconds, count = 1) {
@@ -470,4 +475,213 @@ test("reads an invalid property value back as the default", () => {
   Reflect.set(element, "fillMode", "fade")
 
   expect(element).toMatchObject({ density: 30, fillMode: "instant", flakeSize: 10 })
+})
+
+async function emulateReducedMotion(reduce: boolean): Promise<void> {
+  await cdp().send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: reduce ? "reduce" : "no-preference" }],
+  })
+}
+
+async function settle(milliseconds = 100): Promise<void> {
+  const end = Date.now() + milliseconds
+
+  await vi.waitFor(
+    () => {
+      if (Date.now() < end) {
+        throw new Error("Still settling.")
+      }
+    },
+    { interval: 10 },
+  )
+}
+
+/** Whether the animation draws a new frame when the clock moves on. */
+function isAnimating(drawing: Drawing): boolean {
+  const before = drawing.lastFrame()
+  drawing.advance(100)
+
+  return drawing.lastFrame() !== before
+}
+
+test("paused is a presence-based boolean attribute and property", () => {
+  const element = mount()
+  expect(element.paused).toBe(false)
+
+  element.setAttribute("paused", "")
+  expect(element.paused).toBe(true)
+
+  element.removeAttribute("paused")
+  expect(element.paused).toBe(false)
+
+  element.paused = true
+  expect(element.getAttribute("paused")).toBe("")
+
+  element.paused = false
+  expect(element.hasAttribute("paused")).toBe(false)
+})
+
+test("ignoreReducedMotion is a presence-based boolean attribute and property", () => {
+  const element = mount()
+  expect(element.ignoreReducedMotion).toBe(false)
+
+  element.setAttribute("ignore-reduced-motion", "")
+  expect(element.ignoreReducedMotion).toBe(true)
+
+  element.ignoreReducedMotion = false
+  expect(element.hasAttribute("ignore-reduced-motion")).toBe(false)
+
+  element.ignoreReducedMotion = true
+  expect(element.getAttribute("ignore-reduced-motion")).toBe("")
+})
+
+test("draws one frame but does not animate when it starts paused", () => {
+  const drawing = stubDrawing()
+  mount({ ...bigSnow, paused: "" })
+
+  expect(drawing.lastFrame().arcs.length).toBeGreaterThan(0)
+  expect(isAnimating(drawing)).toBe(false)
+})
+
+test("animates until paused and again after resuming", () => {
+  const drawing = stubDrawing()
+  const element = mount(bigSnow)
+  expect(isAnimating(drawing)).toBe(true)
+
+  element.paused = true
+  expect(isAnimating(drawing)).toBe(false)
+
+  element.removeAttribute("paused")
+  expect(isAnimating(drawing)).toBe(true)
+})
+
+test("does not move flakes for the time spent paused", () => {
+  const drawing = stubDrawing()
+
+  const element = mount({
+    ...bigSnow,
+    density: "1",
+    "flake-direction-deviation": "0",
+    "flake-speed": "200",
+    "flake-speed-deviation": "0",
+  })
+
+  element.paused = true
+  const [before] = drawing.lastFrame().arcs
+  drawing.advance(5000)
+  element.paused = false
+  drawing.advance(100)
+  const [after] = drawing.lastFrame().arcs
+
+  expect(after?.y).toBeCloseTo((before?.y ?? 0) + 20)
+})
+
+test("stops while the system asks for reduced motion and resumes when it does not", async () => {
+  const drawing = stubDrawing()
+  const element = mount(bigSnow)
+  await emulateReducedMotion(true)
+  await expect.poll(() => isAnimating(drawing)).toBe(false)
+  expect(element.paused).toBe(false)
+  expect(element.hasAttribute("paused")).toBe(false)
+
+  await emulateReducedMotion(false)
+  await expect.poll(() => isAnimating(drawing)).toBe(true)
+})
+
+test("does not start when the page loads with reduced motion", async () => {
+  await emulateReducedMotion(true)
+  const drawing = stubDrawing()
+  mount(bigSnow)
+
+  expect(drawing.lastFrame().arcs.length).toBeGreaterThan(0)
+  expect(isAnimating(drawing)).toBe(false)
+})
+
+test("keeps an author pause when reduced motion is turned off", async () => {
+  const drawing = stubDrawing()
+  mount({ ...bigSnow, paused: "" })
+  await emulateReducedMotion(true)
+  await emulateReducedMotion(false)
+
+  expect(isAnimating(drawing)).toBe(false)
+})
+
+test("keeps animating under reduced motion with ignore-reduced-motion", async () => {
+  const drawing = stubDrawing()
+  const element = mount({ ...bigSnow, "ignore-reduced-motion": "" })
+  await emulateReducedMotion(true)
+  expect(isAnimating(drawing)).toBe(true)
+
+  element.ignoreReducedMotion = false
+  expect(isAnimating(drawing)).toBe(false)
+
+  element.ignoreReducedMotion = true
+  expect(isAnimating(drawing)).toBe(true)
+})
+
+test("lets paused win over ignore-reduced-motion", async () => {
+  const drawing = stubDrawing()
+  const element = mount({ ...bigSnow, "ignore-reduced-motion": "" })
+  await emulateReducedMotion(true)
+  element.paused = true
+
+  expect(isAnimating(drawing)).toBe(false)
+})
+
+test("stops animating when removed from the page", () => {
+  const drawing = stubDrawing()
+  const element = mount(bigSnow)
+  element.remove()
+
+  expect(isAnimating(drawing)).toBe(false)
+})
+
+test("resumes from the same flakes when put back, without simulating the time away", async () => {
+  const drawing = stubDrawing()
+
+  const element = mount({
+    ...bigSnow,
+    density: "5",
+    "flake-direction-deviation": "0",
+    "flake-speed": "200",
+    "flake-speed-deviation": "0",
+  })
+
+  const before = drawing.lastFrame().arcs
+
+  element.remove()
+  drawing.advance(5000)
+  await settle()
+
+  document.body.append(element)
+  await settle()
+
+  drawing.advance(100)
+  const after = drawing.lastFrame().arcs
+
+  expect(after).toHaveLength(before.length)
+
+  for (const [i, arc] of before.entries()) {
+    expect(after[i]?.y).toBeCloseTo(arc.y + 20)
+    expect(after[i]?.x).toBeCloseTo(arc.x)
+  }
+})
+
+test("stays paused when put back while the author has it paused", () => {
+  const drawing = stubDrawing()
+  const element = mount({ ...bigSnow, paused: "" })
+  element.remove()
+  document.body.append(element)
+
+  expect(isAnimating(drawing)).toBe(false)
+})
+
+test("does not listen to reduced motion changes while removed", async () => {
+  const drawing = stubDrawing()
+  const element = mount(bigSnow)
+  element.remove()
+  await emulateReducedMotion(true)
+  await emulateReducedMotion(false)
+
+  expect(isAnimating(drawing)).toBe(false)
 })

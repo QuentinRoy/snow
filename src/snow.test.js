@@ -87,6 +87,7 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
     clientWidth: 100,
     getContext: vi.fn().mockReturnValue(context),
     height: 100,
+    isConnected: true,
     width: 100,
   }
 
@@ -431,6 +432,20 @@ test("removes cropped flakes and handles an empty canvas before growing", () => 
   expect(context.arc).not.toHaveBeenCalled()
   resize(0, 0)
   expect(context.arc).not.toHaveBeenCalled()
+  resize(100, 100)
+  expect(context.arc).toHaveBeenCalledTimes(4)
+})
+
+test("keeps its flakes when the canvas leaves the page and comes back", () => {
+  const { canvas, context, resize, snow } = setupAnimation({ density: 400 })
+  expect(context.arc).toHaveBeenCalledTimes(4)
+  // Refilling is off, so only surviving flakes can reappear.
+  snow.fillMode = "none"
+
+  // Browsers report a detached canvas as empty.
+  canvas.isConnected = false
+  resize(0, 0)
+  canvas.isConnected = true
   resize(100, 100)
   expect(context.arc).toHaveBeenCalledTimes(4)
 })
