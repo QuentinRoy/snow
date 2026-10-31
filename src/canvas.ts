@@ -1,67 +1,12 @@
-const positions = new WeakMap<
-  HTMLElement,
-  { count: number; value: string; priority: string; appliedPriority: string }
->()
-
-/** Keep automatic positioning until the last animation releases this container. */
-function positionContainer(container: HTMLElement): (() => void) | undefined {
-  let position = positions.get(container)
-
-  if (position === undefined) {
-    if (getComputedStyle(container).position !== "static") {
-      return undefined
-    }
-
-    const { style } = container
-    position = {
-      count: 0,
-      value: style.position,
-      priority: style.getPropertyPriority("position"),
-      appliedPriority: "",
-    }
-    style.position = "relative"
-
-    if (getComputedStyle(container).position === "static") {
-      style.setProperty("position", "relative", "important")
-    }
-
-    position.appliedPriority = style.getPropertyPriority("position")
-    positions.set(container, position)
-  }
-
-  const active = position
-  active.count += 1
-
-  return () => {
-    active.count -= 1
-
-    if (active.count !== 0) {
-      return
-    }
-
-    positions.delete(container)
-    const { style } = container
-
-    if (
-      style.position === "relative" &&
-      style.getPropertyPriority("position") === active.appliedPriority
-    ) {
-      style.setProperty("position", active.value, active.priority)
-    }
-  }
-}
-
-/** Computed lengths are pixels; non-rendered elements can return "auto". */
+/** Computed lengths are pixels, but some other values may be returned when the element is not rendered. */
 function pixels(value: string): number {
-  return Number(value.replace(/px$/u, "")) || 0
+  const match = /^(?<number>\d+(?:\.\d+)?)px$/u.exec(value)
+
+  return Number(match?.groups?.number) || 0
 }
 
 /** Own a responsive canvas without stretching its previous bitmap during resize. */
 export function createCanvas(host: HTMLElement) {
-  if (host.localName === "canvas") {
-    throw new TypeError("snow() expects a container, not a canvas.")
-  }
-
   const canvas = host.ownerDocument.createElement("canvas")
   canvas.setAttribute("aria-hidden", "true")
   Object.assign(canvas.style, {
@@ -77,7 +22,6 @@ export function createCanvas(host: HTMLElement) {
     transformOrigin: "0 0",
   })
   let pixelRatio = 0
-  let releasePosition: (() => void) | undefined
   let needsPositioning = true
 
   return {
@@ -87,7 +31,14 @@ export function createCanvas(host: HTMLElement) {
     },
     resize(box?: Pick<DOMRectReadOnly, "width" | "height">) {
       if (needsPositioning && host.isConnected) {
-        releasePosition = positionContainer(host)
+        if (getComputedStyle(host).position === "static") {
+          host.style.position = "relative"
+
+          if (getComputedStyle(host).position === "static") {
+            host.style.setProperty("position", "relative", "important")
+          }
+        }
+
         needsPositioning = false
       }
 
@@ -124,8 +75,6 @@ export function createCanvas(host: HTMLElement) {
     },
     remove() {
       canvas.remove()
-      releasePosition?.()
-      releasePosition = undefined
     },
   }
 }

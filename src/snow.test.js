@@ -266,13 +266,13 @@ test.each([
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
 })
 
-test("observes only its canvas and restores automatic positioning on disposal", () => {
+test("observes only its canvas and leaves automatic positioning in place on disposal", () => {
   const { canvas, container, observers, snow } = setupAnimation()
   expect(observers).toHaveLength(1)
   expect(observers[0].observe).toHaveBeenCalledExactlyOnceWith(canvas)
   expect(container.style).toMatchObject({ padding: "0px", position: "relative" })
   snow.dispose()
-  expect(container.style).toMatchObject({ padding: "0px", position: "static" })
+  expect(container.style).toMatchObject({ padding: "0px", position: "relative" })
 })
 
 test("updates pixel density while paused without moving flakes", () => {
@@ -1100,7 +1100,7 @@ test("disposing removes the canvas and stops frames and observation", () => {
   const { canvas, container, cancelFrame, context, observers, snow } = setupAnimation()
   snow.dispose()
   expect(canvas.remove).toHaveBeenCalledOnce()
-  expect(container.style.position).toBe("static")
+  expect(container.style.position).toBe("relative")
   expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
   expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
   expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
@@ -1180,14 +1180,6 @@ test("preserves an existing disposal symbol when imported without a DOM", async 
   snow[Symbol.dispose]()
   expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
   expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
-})
-
-test("rejects canvas inputs before creating or attaching anything", () => {
-  const { container } = setupAnimation()
-  container.localName = "canvas"
-  container.ownerDocument.createElement.mockClear()
-  expect(() => createSnow(container)).toThrow("snow() expects a container, not a canvas.")
-  expect(container.ownerDocument.createElement).not.toHaveBeenCalled()
 })
 
 test("disposal preserves a consumer's later positioning change", () => {

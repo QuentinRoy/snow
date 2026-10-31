@@ -49,7 +49,7 @@ export interface SnowSettings {
 export interface SnowAnimation extends SnowSettings {
   /**
    * Stop the animation for good: cancel the scheduled frame, disconnect observation, and remove
-   * the owned canvas. Release automatic container positioning when no animation needs it.
+   * the owned canvas. Container positioning is left in place.
    * Later calls and `paused` changes do nothing.
    */
   dispose: () => void

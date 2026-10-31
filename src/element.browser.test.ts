@@ -1213,11 +1213,11 @@ test("removes its canvas when initial sizing fails", () => {
   const container = document.createElement("div")
   container.style.cssText = "width: 200px; height: 100px"
   document.body.append(container)
-  const inlineStyle = container.getAttribute("style")
-
   expect(() => snow(container, { density: Number.MAX_VALUE })).toThrow(RangeError)
   expect(container.children).toHaveLength(0)
-  expect(container.getAttribute("style")).toBe(inlineStyle)
+  expect(container.style.position).toBe("relative")
+  expect(container.style.width).toBe("200px")
+  expect(container.style.height).toBe("100px")
 })
 
 test.each([0.8, 1.25, 2])("does not enlarge scrollable overflow at density %s", async (ratio) => {
@@ -1237,7 +1237,7 @@ test.each([0.8, 1.25, 2])("does not enlarge scrollable overflow at density %s", 
   animation.dispose()
 })
 
-test("keeps automatic positioning until the last animation is disposed", () => {
+test("leaves automatic positioning in place after all animations are disposed", () => {
   const container = document.createElement("div")
   container.style.cssText = "width: 200px; height: 100px; padding: 10px"
   document.body.append(container)
@@ -1251,11 +1251,11 @@ test("keeps automatic positioning until the last animation is disposed", () => {
   expect(container.style.position).toBe("relative")
   expect(container.querySelectorAll("canvas")).toHaveLength(1)
   second.dispose()
-  expect(container.style.position).toBe("")
+  expect(container.style.position).toBe("relative")
   expect(container.querySelectorAll("canvas")).toHaveLength(0)
 })
 
-test("positions a static container and restores its original inline priority", () => {
+test("positions a static container and leaves it positioned after disposal", () => {
   const host = document.createElement("div")
   host.style.cssText = "position: static !important; width: 200px; height: 100px; padding: 10px"
   document.body.append(host)
@@ -1268,11 +1268,10 @@ test("positions a static container and restores its original inline priority", (
   expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
   animation.dispose()
   expect(host.children).toHaveLength(0)
-  expect(host.style.position).toBe("static")
-  expect(host.style.getPropertyPriority("position")).toBe("important")
+  expect(host.style.position).toBe("relative")
 })
 
-test("preserves consumer style changes when automatic positioning is released", () => {
+test("preserves consumer style changes on disposal", () => {
   const container = document.createElement("div")
   container.style.cssText = "width: 200px; height: 100px"
   document.body.append(container)
@@ -1296,9 +1295,9 @@ test("positions a container despite an important static stylesheet rule", () => 
 
   expect(getComputedStyle(container).position).toBe("relative")
   animation.dispose()
-  expect(container.style.position).toBe("")
-  expect(container.style.getPropertyPriority("position")).toBe("")
-  expect(getComputedStyle(container).position).toBe("static")
+  expect(container.style.position).toBe("relative")
+  expect(container.style.getPropertyPriority("position")).toBe("important")
+  expect(getComputedStyle(container).position).toBe("relative")
 })
 
 test("positions a container first attached after animation creation", async () => {
@@ -1312,7 +1311,7 @@ test("positions a container first attached after animation creation", async () =
   await expect.poll(() => canvas?.width).toBe(220 * devicePixelRatio)
   expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
   animation.dispose()
-  expect(container.style.position).toBe("")
+  expect(container.style.position).toBe("relative")
 })
 
 test("preserves stylesheet positioning when a detached container is attached", async () => {
