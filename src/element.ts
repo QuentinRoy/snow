@@ -76,7 +76,8 @@ function nonNegativeNumber(fallback: number): AttributeSerializer<unknown, numbe
   }
 }
 
-// The core options the element forwards as they are.
+// Every core option except `paused`, which the element combines with reduced motion and whether it
+// is connected before passing it on.
 const optionNames = [
   "density",
   "fillMode",
@@ -90,7 +91,7 @@ const optionNames = [
   "showFps",
 ] as const satisfies readonly (keyof SnowOptions)[]
 
-const elementOnlyNames = ["height", "width"] as const
+const elementOnlyNames = ["height", "ignoreReducedMotion", "paused", "width"] as const
 
 const SnowElementBase = WithAttributeProps(HTMLElement, {
   density: nonNegativeNumber(defaultSettings.density),
@@ -113,6 +114,8 @@ const SnowElementBase = WithAttributeProps(HTMLElement, {
   flakeSpeed: finiteNumber(defaultSettings.flakeSpeed),
   flakeSpeedDeviation: finiteNumber(defaultSettings.flakeSpeedDeviation),
   height: dimension(defaultHeight),
+  ignoreReducedMotion: boolean(),
+  paused: boolean(),
   showFps: boolean(),
   width: dimension(defaultWidth),
 })
@@ -130,8 +133,13 @@ export class SnowElement extends SnowElementBase {
 
   readonly #surface = document.createElement("div")
   readonly #root = this.attachShadow({ mode: "open" })
+  readonly #reducedMotion = matchMedia("(prefers-reduced-motion: reduce)")
   #animation: SnowAnimation | undefined
   #setDimensions: ReturnType<typeof adoptStyles>
+
+  readonly #onReducedMotionChange = (): void => {
+    this.#syncPlayback()
+  }
 
   constructor() {
     super()
@@ -146,14 +154,14 @@ export class SnowElement extends SnowElementBase {
   connectedCallback(): void {
     this.#setDimensions = adoptStyles(this.#root)
     this.#setDimensions?.(this.width, this.height)
+    this.#reducedMotion.addEventListener("change", this.#onReducedMotionChange)
     this.#animation ??= snow(this.#surface, { ...this.#readOptions(), paused: true })
-    this.#animation.paused = false
+    this.#syncPlayback()
   }
 
   disconnectedCallback(): void {
-    if (this.#animation !== undefined) {
-      this.#animation.paused = true
-    }
+    this.#reducedMotion.removeEventListener("change", this.#onReducedMotionChange)
+    this.#syncPlayback()
   }
 
   #readOptions(): SnowOptions {
@@ -166,6 +174,17 @@ export class SnowElement extends SnowElementBase {
   #syncAnimation(): void {
     if (this.#animation !== undefined) {
       Object.assign(this.#animation, this.#readOptions())
+      this.#syncPlayback()
+    }
+  }
+
+  /** The element's own `paused` only mirrors the attribute, so the core gets the effective value. */
+  #syncPlayback(): void {
+    if (this.#animation !== undefined) {
+      this.#animation.paused =
+        !this.isConnected ||
+        this.paused ||
+        (this.#reducedMotion.matches && !this.ignoreReducedMotion)
     }
   }
 }
