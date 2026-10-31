@@ -1,6 +1,6 @@
-import type { CanvasSize, SnowSettings } from "./snow"
-import { SnowFlake } from "./snow-flake"
-import { randomExponential, randomNormal } from "./math"
+import type { CanvasSize, SnowSettings } from "./snow.ts"
+import { SnowFlake } from "./snow-flake.ts"
+import { randomExponential, randomNormal } from "./math.ts"
 
 /** An entering flake and its elapsed time at frame end. */
 interface Arrival {
@@ -144,15 +144,15 @@ interface SpeedProposal {
 }
 
 /** Calculate the parameters and weights for candidate-speed sampling. */
-function speedProposal({ meanSpeed, sdSpeed }: SnowSettings): SpeedProposal {
-  const deviation = Math.abs(sdSpeed)
-  const negativeMean = deviation === 0 ? 0 : Math.min(0, meanSpeed) / deviation
+function speedProposal({ flakeSpeed, flakeSpeedDeviation }: SnowSettings): SpeedProposal {
+  const deviation = Math.abs(flakeSpeedDeviation)
+  const negativeMean = deviation === 0 ? 0 : Math.min(0, flakeSpeed) / deviation
 
   // Extra fast candidates cover the speed weighting without limiting maximum speed.
   return {
-    mean: meanSpeed,
+    mean: flakeSpeed,
     deviation,
-    normalWeight: Math.max(0, meanSpeed),
+    normalWeight: Math.max(0, flakeSpeed),
     tailWeight: (deviation / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * negativeMean ** 2),
   }
 }

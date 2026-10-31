@@ -10,47 +10,51 @@
   </head>
   <body>
     <h1>Let it snow!</h1>
-    <canvas id="snow-canvas"></canvas>
+    <snow-fall></snow-fall>
     <div id="controls">
       <div class="control">
-        <label for="meanSize">meanSize</label>
-        <input type="number" min="0" step="1" id="meanSize" />
+        <label for="flakeSize">flake size</label>
+        <input type="number" min="0" step="1" id="flakeSize" />
       </div>
       <div class="control">
-        <label for="sdSize">size deviation</label>
-        <input type="number" min="0" step="1" id="sdSize" />
+        <label for="flakeSizeDeviation">size deviation</label>
+        <input type="number" min="0" step="1" id="flakeSizeDeviation" />
       </div>
       <div class="control">
-        <label for="color">color</label>
-        <input type="text" id="color" value="white" />
+        <label for="flakeColor">flake color</label>
+        <input type="text" id="flakeColor" />
       </div>
       <div class="control">
-        <label for="meanSpeed">meanSpeed</label>
-        <input type="number" min="0" step="1" id="meanSpeed" />
+        <label for="flakeSpeed">flake speed</label>
+        <input type="number" min="0" step="1" id="flakeSpeed" />
       </div>
       <div class="control">
-        <label for="sdSpeed">speed deviation</label>
-        <input type="number" min="0" step="1" id="sdSpeed" />
+        <label for="flakeSpeedDeviation">speed deviation</label>
+        <input type="number" min="0" step="1" id="flakeSpeedDeviation" />
       </div>
       <div class="control">
-        <label for="meanAngle">meanAngle</label>
-        <input type="number" min="-360" step="1" max="360" id="meanAngle" />
+        <label for="flakeDirection">flake direction</label>
+        <input type="number" min="-360" step="1" max="360" id="flakeDirection" />
       </div>
       <div class="control">
-        <label for="sdAngle">angle deviation</label>
-        <input type="number" min="0" step="5" max="180" id="sdAngle" />
+        <label for="flakeDirectionDeviation">direction deviation</label>
+        <input type="number" min="0" step="5" max="180" id="flakeDirectionDeviation" />
       </div>
       <div class="control">
         <label for="density" title="Snowflakes per 1,000 × 1,000 CSS pixels">density</label>
         <input type="number" min="0" step="1" id="density" />
       </div>
       <div class="control">
-        <input type="checkbox" id="autoFill" />
-        <label for="autoFill">auto fill</label>
+        <input type="checkbox" id="fillMode" />
+        <label for="fillMode">fill instantly</label>
       </div>
       <div class="control">
-        <input type="checkbox" id="isFpsShown" />
-        <label for="isFpsShown">show FPS</label>
+        <input type="checkbox" id="showFps" />
+        <label for="showFps">show FPS</label>
+      </div>
+      <div class="control">
+        <input type="checkbox" id="paused" />
+        <label for="paused">paused</label>
       </div>
       <div class="control">
         <button type="button" class="close-button">hide</button>

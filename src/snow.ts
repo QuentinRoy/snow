@@ -1,51 +1,61 @@
-import { createArrivals } from "./arrivals"
-import { SnowFlake } from "./snow-flake"
+import { createArrivals } from "./arrivals.ts"
+import { createCanvas } from "./canvas.ts"
+import { defaultSettings } from "./defaults.ts"
+import { SnowFlake } from "./snow-flake.ts"
 
-/** Controls and mutable settings for a snow animation. */
-interface SnowAnimation {
-  /** Pause while keeping the current frame visible. */
-  stop: () => void
+if (Symbol.dispose === undefined || Symbol.dispose === null) {
+  Reflect.set(Symbol, "dispose", Symbol("Symbol.dispose"))
+}
 
-  /** Continue from the paused positions. */
-  resume: () => void
+/** How empty space gets filled. */
+export type FillMode = "instant" | "none"
 
+/** Mutable settings for a snow animation. */
+export interface SnowSettings {
+  /**
+   * Stop scheduling frames while keeping the current frame visible. Setting it back to `false`
+   * continues from the same flake positions and ignores the time spent paused.
+   */
+  paused: boolean
   /** Average flake diameter in CSS pixels. */
-  meanSize: number
+  flakeSize: number
   /** Standard deviation of flake diameters in CSS pixels. */
-  sdSize: number
+  flakeSizeDeviation: number
   /** Flake color as a CSS color string. */
-  color: string
+  flakeColor: string
   /** Mean of the visible speed distribution in CSS pixels per second. */
-  meanSpeed: number
+  flakeSpeed: number
   /** Standard deviation of speeds in CSS pixels per second. */
-  sdSpeed: number
+  flakeSpeedDeviation: number
   /** Average number of snowflakes per 1,000 by 1,000 CSS-pixel area. */
   density: number
-  /** Fill the canvas at startup and newly exposed areas after resizing. */
-  autoFill: boolean
+  /**
+   * How to fill empty space at startup and in areas exposed by resizing.
+   * "instant" fills it at once; "none" lets flakes drift in from the edges.
+   */
+  fillMode: FillMode
   /**
    * Average direction in degrees from vertically downward.
    * 90 is left, 180 is up, and -90 is right.
    */
-  meanAngle: number
+  flakeDirection: number
   /** Standard deviation of directions in degrees. */
-  sdAngle: number
+  flakeDirectionDeviation: number
   /** Show the frame rate. */
-  isFpsShown: boolean
-
-  /**
-   * Apply settings and layout changes, then redraw without advancing time.
-   *
-   * @remarks You don't usually need to call this method directly.
-   */
-  draw: () => void
+  showFps: boolean
 }
 
-/** Current appearance, motion, and density settings. */
-export type SnowSettings = Omit<SnowAnimation, "draw" | "stop" | "resume">
-
-/** Settings that override the defaults at startup. */
-type SnowOptions = Partial<SnowSettings>
+/** A running snow animation: its settings, plus teardown. */
+export interface SnowAnimation extends SnowSettings {
+  /**
+   * Stop the animation for good: cancel the scheduled frame, disconnect observation, and remove
+   * the owned canvas. Container styles are left unchanged.
+   * Later calls and `paused` changes do nothing.
+   */
+  dispose: () => void
+  /** Same as `dispose()`, so `using animation = snow(container)` disposes at the end of the scope. */
+  [Symbol.dispose]: () => void
+}
 
 /** Canvas dimensions in CSS pixels. */
 export interface CanvasSize {
@@ -59,37 +69,28 @@ interface ExposedArea extends CanvasSize {
   overlapHeight: number
 }
 
-const defaultOptions: SnowSettings = {
-  meanSize: 10,
-  sdSize: 2,
-  meanSpeed: 150,
-  sdSpeed: 10,
-  meanAngle: 0,
-  sdAngle: 5,
-  color: "rgba(255,255,255,0.9)",
-  density: 30,
-  autoFill: true,
-  isFpsShown: false,
-}
-
 const numericSettingKeys = [
-  "meanSize",
-  "sdSize",
-  "meanSpeed",
-  "sdSpeed",
-  "meanAngle",
-  "sdAngle",
+  "flakeSize",
+  "flakeSizeDeviation",
+  "flakeSpeed",
+  "flakeSpeedDeviation",
+  "flakeDirection",
+  "flakeDirectionDeviation",
 ] as const
 
 /**
  * Animate snow at a target visible density, with geometry measured in CSS pixels.
  *
  * @remarks
- * Autofill seeds the canvas at startup and on growth. Later flakes enter through
+ * The `"instant"` fill mode seeds the canvas at startup and on growth. Later flakes enter through
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
+ * Size and position the container with CSS, for example `position: relative`. Snow fills its padding box.
+ * Snow owns and removes its canvas.
  */
-export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
+export function snow(host: HTMLElement, options?: Partial<SnowSettings>): SnowAnimation {
+  const surface = createCanvas(host)
+  const { canvas } = surface
   const context = canvas.getContext("2d")
 
   if (context === null) {
@@ -103,18 +104,6 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
   let height = 0
   const arrivals = createArrivals()
 
-  // Reading the client size can force a layout, so only do it after a resize.
-  let isSizeStale = true
-
-  const resizeObserver =
-    typeof ResizeObserver === "undefined"
-      ? undefined
-      : new ResizeObserver(() => {
-          isSizeStale = true
-        })
-
-  resizeObserver?.observe(canvas)
-
   const frameDurations: number[] = []
   const maxFrameDurations = 50
   let nextFrameDurationIndex = 0
@@ -124,7 +113,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     // The frame timestamp can precede the resume time; also avoid large jumps after a delayed frame.
     const deltaTime = Math.min(Math.max(0, (now - lastFrameTime) / 1000), 0.1)
 
-    synchronize()
+    validateSettings()
     advanceFlakes(deltaTime)
 
     lastFrameTime = now
@@ -196,8 +185,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     }
   }
 
-  /** Validate settings and apply resizing without advancing time. */
-  const synchronize = (): void => {
+  const validateSettings = (): void => {
     if (!Number.isFinite(animation.density) || animation.density < 0) {
       throw new RangeError("density must be a finite, nonnegative number")
     }
@@ -207,12 +195,10 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
         throw new RangeError(`${key} must be a finite number`)
       }
     }
+  }
 
-    const nextWidth = isSizeStale ? canvas.clientWidth : width
-    const nextHeight = isSizeStale ? canvas.clientHeight : height
-
-    isSizeStale = resizeObserver === undefined
-
+  /** Keep flakes in the area shared with the previous size, and fill the rest if requested. */
+  const applyLayout = (nextWidth: number, nextHeight: number): void => {
     const overlapWidth = Math.min(width, nextWidth)
     const overlapHeight = Math.min(height, nextHeight)
     const count = Math.round((animation.density * nextWidth * nextHeight) / 1_000_000)
@@ -221,14 +207,14 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
       throw new RangeError("density produces too many snowflakes")
     }
 
-    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
-
     if (nextWidth === width && nextHeight === height) {
       return
     }
 
+    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
+
     // Preserve the shared region; only newly exposed space needs immediate filling.
-    const exposedCount = animation.autoFill ? count - overlapCount : 0
+    const exposedCount = animation.fillMode === "instant" ? count - overlapCount : 0
     let survivingCount = 0
 
     for (const snowFlake of snowFlakes) {
@@ -249,6 +235,17 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
 
     width = nextWidth
     height = nextHeight
+  }
+
+  /**
+   * Match the canvas resolution to its displayed size, then redraw without advancing time.
+   * Setting the resolution erases the bitmap, so the redraw is required.
+   */
+  const resize = (box?: Pick<DOMRectReadOnly, "width" | "height">): void => {
+    validateSettings()
+    const { width: cssWidth, height: cssHeight } = surface.resize(box)
+    applyLayout(cssWidth, cssHeight)
+    render()
   }
 
   /** Draw the current scene without advancing time. */
@@ -284,7 +281,7 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
       context.fill()
     }
 
-    if (animation.isFpsShown) {
+    if (animation.showFps) {
       const averageFrameDuration =
         frameDurations.length > 0
           ? frameDurations.reduce((a, b) => a + b, 0) / frameDurations.length
@@ -299,40 +296,106 @@ export default function snow(canvas: HTMLCanvasElement, options?: SnowOptions): 
     context.restore()
   }
 
-  const draw = (): void => {
-    isSizeStale = true
-    synchronize()
-    render()
+  let isPaused = options?.paused ?? false
+  let isDisposed = false
+
+  const startFrames = (): void => {
+    lastFrameTime = performance.now()
+    animationFrameId = requestAnimationFrame(loop)
   }
 
-  const stop = (): SnowAnimation => {
+  const stopFrames = (): void => {
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId)
       animationFrameId = null
     }
-
-    return animation
   }
 
-  const resume = (): SnowAnimation => {
-    if (animationFrameId === null) {
-      lastFrameTime = performance.now()
-      animationFrameId = requestAnimationFrame(loop)
+  let pixelRatioQuery: MediaQueryList | undefined
+
+  const watchPixelRatio = (): void => {
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
+    pixelRatioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
+    pixelRatioQuery.addEventListener("change", onPixelRatioChange)
+  }
+
+  const onPixelRatioChange = (): void => {
+    if (isDisposed) {
+      return
     }
 
-    return animation
+    watchPixelRatio()
+
+    if (host.isConnected) {
+      resize()
+    }
+  }
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    // A container off the page reports an empty size, which would drop every flake.
+    if (isDisposed || !host.isConnected) {
+      return
+    }
+
+    for (const { contentRect, target } of entries) {
+      if (target === canvas) {
+        resize(contentRect)
+      }
+    }
+  })
+
+  const dispose = (): void => {
+    if (isDisposed) {
+      return
+    }
+
+    isDisposed = true
+    resizeObserver.disconnect()
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
+    stopFrames()
+
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    surface.remove()
   }
 
   const animation: SnowAnimation = {
-    ...defaultOptions,
+    ...defaultSettings,
     ...options,
-    draw,
-    stop,
-    resume,
+    get paused() {
+      return isPaused
+    },
+    set paused(value) {
+      if (isDisposed || value === isPaused) {
+        return
+      }
+
+      isPaused = value
+
+      if (value) {
+        stopFrames()
+      } else {
+        startFrames()
+      }
+    },
+    dispose,
+    [Symbol.dispose]: dispose,
   }
 
-  animation.draw()
-  resume()
+  validateSettings()
+
+  try {
+    host.append(canvas)
+    resize()
+    resizeObserver.observe(canvas)
+    watchPixelRatio()
+
+    if (!isPaused) {
+      startFrames()
+    }
+  } catch (error) {
+    dispose()
+    throw error
+  }
 
   return animation
 }
