@@ -1,88 +1,76 @@
-/** Computed lengths are pixels; non-rendered elements can return "auto". */
+/** Computed lengths are pixels, but some other values may be returned when the element is not rendered. */
 function pixels(value: string): number {
-  return Number(value.replace(/px$/u, "")) || 0
+  const match = /^(?<number>\d+(?:\.\d+)?)px$/u.exec(value)
+
+  return Number(match?.groups?.number) || 0
 }
 
-type ContentBox = Pick<DOMRectReadOnly, "width" | "height" | "x" | "y">
-
-/** Own a decorative canvas whose CSS size and bitmap always change together. */
-export function createCanvas(container: HTMLElement) {
-  if (container.localName === "canvas") {
-    throw new TypeError("snow() expects a container, not a canvas.")
-  }
-
-  const canvas = container.ownerDocument.createElement("canvas")
+/** Own a responsive canvas without stretching its previous bitmap during resize. */
+export function createCanvas(host: HTMLElement) {
+  const canvas = host.ownerDocument.createElement("canvas")
   canvas.setAttribute("aria-hidden", "true")
-  canvas.style.cssText = "all: unset; display: block; pointer-events: none; position: absolute"
-
-  const style = getComputedStyle(container)
-  const paddingX = pixels(style.paddingLeft)
-  const paddingY = pixels(style.paddingTop)
-  const horizontalEdges = paddingX + pixels(style.paddingRight)
-  const verticalEdges = paddingY + pixels(style.paddingBottom)
-  const borderBox = style.boxSizing === "border-box"
-
-  let box: ContentBox = {
-    width: Math.max(
-      0,
-      pixels(style.width) -
-        (borderBox
-          ? horizontalEdges + pixels(style.borderLeftWidth) + pixels(style.borderRightWidth)
-          : 0),
-    ),
-    height: Math.max(
-      0,
-      pixels(style.height) -
-        (borderBox
-          ? verticalEdges + pixels(style.borderTopWidth) + pixels(style.borderBottomWidth)
-          : 0),
-    ),
-    x: paddingX,
-    y: paddingY,
-  }
-
-  const previousPosition = container.style.getPropertyValue("position")
-  const previousPriority = container.style.getPropertyPriority("position")
-  const needsPosition = style.position === "static"
+  Object.assign(canvas.style, {
+    all: "unset",
+    display: "block",
+    pointerEvents: "none",
+    position: "absolute",
+    left: 0,
+    top: 0,
+    objectFit: "none",
+    objectPosition: "0 0",
+    overflow: "clip",
+    transformOrigin: "0 0",
+  })
+  let pixelRatio = 0
+  let positionChecked = false
 
   return {
     canvas,
-    resize(nextBox: ContentBox = box, devicePixelSize?: ResizeObserverSize) {
-      box = nextBox
+    resize(box?: Pick<DOMRectReadOnly, "width" | "height">) {
+      if (!positionChecked && host.isConnected) {
+        if (getComputedStyle(host).position === "static") {
+          console.warn(
+            "snow() requires a positioned container, for example position: relative.",
+            host,
+          )
+        }
 
-      const vertical =
-        devicePixelSize !== undefined && getComputedStyle(container).writingMode !== "horizontal-tb"
-
-      canvas.style.width = `${box.width}px`
-      canvas.style.height = `${box.height}px`
-      canvas.style.left = `${box.x}px`
-      canvas.style.top = `${box.y}px`
-      canvas.width =
-        (vertical ? devicePixelSize?.blockSize : devicePixelSize?.inlineSize) ??
-        Math.round(box.width * devicePixelRatio)
-      canvas.height =
-        (vertical ? devicePixelSize?.inlineSize : devicePixelSize?.blockSize) ??
-        Math.round(box.height * devicePixelRatio)
-
-      return box
-    },
-    mount() {
-      if (needsPosition) {
-        container.style.setProperty("position", "relative")
+        positionChecked = true
       }
 
-      container.append(canvas)
+      const observedRatio = pixelRatio
+
+      if (pixelRatio !== devicePixelRatio) {
+        pixelRatio = devicePixelRatio
+        // The CSS box uses bitmap pixels. Scale it back to CSS pixels while object-fit:none
+        // keeps the previous bitmap unscaled until the resize observer redraws it.
+        Object.assign(canvas.style, {
+          width: `${100 * pixelRatio}%`,
+          height: `${100 * pixelRatio}%`,
+          transform: `scale(${1 / pixelRatio})`,
+        })
+      }
+
+      let width: number
+      let height: number
+
+      if (box === undefined) {
+        const style = getComputedStyle(canvas)
+        width = pixels(style.width) / pixelRatio
+        height = pixels(style.height) / pixelRatio
+      } else {
+        // An entry describes the CSS box at the ratio applied when it was measured.
+        width = box.width / observedRatio
+        height = box.height / observedRatio
+      }
+
+      canvas.width = Math.round(width * pixelRatio)
+      canvas.height = Math.round(height * pixelRatio)
+
+      return { width, height }
     },
     remove() {
       canvas.remove()
-
-      if (
-        needsPosition &&
-        container.style.getPropertyValue("position") === "relative" &&
-        container.style.getPropertyPriority("position") === ""
-      ) {
-        container.style.setProperty("position", previousPosition, previousPriority)
-      }
     },
   }
 }

@@ -1,6 +1,6 @@
 import type { SnowSettings } from "./snow.ts"
 
-/** Shared by the core and the element, kept out of the core entry so it stays private. */
+/** Defaults shared by the core and the element. */
 export const defaultSettings: SnowSettings = {
   flakeSize: 10,
   flakeSizeDeviation: 2,

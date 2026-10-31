@@ -7,14 +7,13 @@ const styles = `
     contain: size;
     contain-intrinsic-size: calc(var(--snow-width, 300) * 1px) calc(var(--snow-height, 150) * 1px);
     display: inline-block;
+    position: relative;
     min-width: 0;
     min-height: 0;
   }
   div {
-    position: relative;
-    display: block;
-    height: 100%;
-    width: 100%;
+    position: absolute;
+    inset: 0;
   }
 `
 

@@ -2,4 +2,4 @@
 "@quentinroy/snow": patch
 ---
 
-Correct canvas bitmap dimensions in vertical writing modes and track pixel-density changes when device-pixel resize observation is unavailable.
+Keep canvas geometry in physical CSS pixels in every writing mode, and update bitmap and CSS density scaling when screen resolution changes.

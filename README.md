@@ -1,6 +1,6 @@
 # Snow
 
-A snow animation for the browser, drawn on a canvas. Use it as a `<snow-fall>` element, or call the `snow()` function on a canvas you manage yourself. The package includes TypeScript declarations.
+A snow animation for the browser, drawn on a canvas. Use it as a `<snow-fall>` element, or call the `snow()` function on a container sized with CSS. The package includes TypeScript declarations.
 
 ## Installation
 
@@ -84,7 +84,7 @@ Write numeric attributes using HTML's [valid number syntax](https://html.spec.wh
 
 Property assignments follow [Web IDL conversion](https://webidl.spec.whatwg.org/#es-type-mapping) before reflection. Dimensions use unsigned-long conversion and the same range and defaults as canvas dimensions: fractions truncate, large values wrap modulo 2³², and values above 2³¹−1 use the default. Other numeric properties accept finite doubles and throw `TypeError` for non-finite values, leaving the attribute unchanged. Numeric strings and `null` are converted; `undefined`, BigInts, and symbols throw for doubles. Density's lower bound is Snow's own policy; assigning a finite negative value preserves it in the attribute while the property reads as zero.
 
-`fill-mode` matches `instant` and `none` without regard to ASCII letter case; whitespace and unknown values select `instant`. String properties use DOMString conversion. Missing `flake-color` reads as an empty string, while the animation uses its default color; an explicitly empty attribute is distinct. Boolean attributes are true whenever present, even with the value `"false"`; property assignments use JavaScript truthiness. Removing an attribute restores its missing-value behavior. These reflection rules follow [HTML](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflect), with Snow's stated defaults and density bound.
+`fill-mode` matches `instant` and `none` without regard to ASCII letter case; whitespace and unknown values select `instant`. String properties use DOMString conversion. Missing `flake-color` reads as the default color, `rgba(255,255,255,0.9)`; an explicitly empty attribute still reads as an empty string. Boolean attributes are true whenever present, even with the value `"false"`; property assignments use JavaScript truthiness. Removing an attribute restores its missing-value behavior. These reflection rules follow [HTML](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflect), with Snow's custom missing-color default and density bound.
 
 Size, speed, direction, and color changes apply to flakes that arrive afterward. Flakes already on screen keep their look until they leave.
 
@@ -134,7 +134,7 @@ The canvas lives in an open shadow root and is hidden from assistive technology.
 Use the function with a container sized by your CSS. Snow creates and owns its canvas:
 
 ```html
-<div id="snow-container" style="width: 800px; height: 600px"></div>
+<div id="snow-container" style="position: relative; width: 800px; height: 600px"></div>
 ```
 
 Run this code in the browser after the container exists, using your application's bundler:
@@ -150,13 +150,13 @@ const animation = snow(container, { flakeColor: "white", density: 30, fillMode: 
 
 The options argument is optional. Call `snow(container)` to use the defaults.
 
-Snow observes the container's content box with one `ResizeObserver`. It updates the canvas's CSS size, bitmap resolution, and drawing together, so resizing does not stretch the previous frame. This works for changes to any ancestor's layout, including while paused. Pixel density changes are handled too, including in vertical writing modes; browsers without device-pixel resize observation use a screen-resolution watcher.
+Snow fills the container's padding box: everything inside the border, including padding. It observes its own canvas with one `ResizeObserver` and redraws after size changes, including while paused. Its responsive CSS keeps the previous bitmap unscaled until redraw, so resizing does not stretch the flakes. A screen-resolution watcher updates the drawing when pixel density changes, including in vertical writing modes.
 
-Give the container its own width and height through CSS, layout, or `aspect-ratio`. The canvas is absolutely positioned and does not contribute to the container's size. Snow sets `position: relative` on a statically positioned container and restores the previous inline value on disposal, unless your code has since changed it. Existing children are preserved; the decorative canvas ignores pointer events. Do not style or resize that canvas yourself.
+The container must be positioned: use `position: relative`, `absolute`, `fixed`, or `sticky`. Snow warns when a connected container has `position: static` and leaves its styles unchanged. Its absolutely positioned canvas adds no layout height, so the container gets its size from existing content, CSS layout, dimensions, or `aspect-ratio`. Explicit width and height are optional when layout already provides a drawing area. An empty container with no height or padding has no visible snow area. Existing children are preserved, and the decorative canvas ignores pointer events. Use the container's `overflow` when you want clipping to rounded corners. Leave the owned canvas's styles and bitmap dimensions to Snow.
 
 Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills newly exposed space at once; with `"none"`, it stays empty until flakes drift in.
 
-For migration to 1.0, replace the canvas passed to `snow()` with a sized container. Canvas inputs are rejected; Snow now creates and removes the canvas itself.
+For migration to 1.0, replace the canvas passed to `snow()` with a container that supplies a drawing area. Snow now creates and removes the canvas itself.
 
 ### Without a bundler
 
@@ -228,7 +228,7 @@ Size, speed, direction, and color changes apply to new arrivals. Visible flakes 
 
 ## Stopping for good
 
-Call `dispose()` when you no longer need the animation, for example before removing the container. It cancels the scheduled frame, stops watching the container, and removes its canvas. After that, a second `dispose()`, changing `paused`, and resizing the container do nothing.
+Call `dispose()` when you no longer need the animation, for example before removing the container. It cancels the scheduled frame, stops observation, and removes its canvas. After that, a second `dispose()`, changing `paused`, and resizing the container do nothing.
 
 ```js
 animation.dispose()
@@ -253,7 +253,7 @@ cd snow
 vp install
 ```
 
-Run commands from the repository root. The core is in [`src/snow.ts`](src/snow.ts) with tests in [`src/snow.test.js`](src/snow.test.js), which run in Node. The element is in [`src/element.ts`](src/element.ts) with tests in `src/*.browser.test.ts`, which run in Chromium through Playwright. Install the browser once with `vp exec playwright install chromium`. Continuous integration runs them in Playwright's container image instead, so its tag must match the pinned `playwright` version. The interactive demo is in [`demo/`](demo/).
+Run commands from the repository root. The core is in [`src/snow.ts`](src/snow.ts) with tests in [`src/snow.test.js`](src/snow.test.js), which run in Node. The element is in [`src/element.ts`](src/element.ts) with tests in `src/**/*.browser.test.ts`, which run in Chromium through Playwright. Install the browser once with `vp exec playwright install chromium`. Continuous integration runs them in Playwright's container image instead, so its tag must match the pinned `playwright` version. The interactive demo is in [`demo/`](demo/).
 
 To work on the demo, start the library build in one terminal:
 
