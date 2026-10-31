@@ -1,11 +1,77 @@
+const positions = new WeakMap<
+  HTMLElement,
+  { count: number; value: string; priority: string; appliedPriority: string }
+>()
+
+/** Use the namespace so hosts adopted from another window remain valid. */
+function isHTMLHost(element: Element): element is HTMLElement {
+  return element.namespaceURI === "http://www.w3.org/1999/xhtml"
+}
+
+/** Keep automatic positioning until the last animation releases this container. */
+function positionContainer(container: HTMLElement | ShadowRoot): (() => void) | undefined {
+  if ("host" in container) {
+    if (!isHTMLHost(container.host)) {
+      throw new TypeError("snow() requires an HTML shadow host.")
+    }
+
+    return positionContainer(container.host)
+  }
+
+  let position = positions.get(container)
+
+  if (position === undefined) {
+    if (getComputedStyle(container).position !== "static") {
+      return undefined
+    }
+
+    const { style } = container
+    position = {
+      count: 0,
+      value: style.position,
+      priority: style.getPropertyPriority("position"),
+      appliedPriority: "",
+    }
+    style.position = "relative"
+
+    if (getComputedStyle(container).position === "static") {
+      style.setProperty("position", "relative", "important")
+    }
+
+    position.appliedPriority = style.getPropertyPriority("position")
+    positions.set(container, position)
+  }
+
+  const active = position
+  active.count += 1
+
+  return () => {
+    active.count -= 1
+
+    if (active.count !== 0) {
+      return
+    }
+
+    positions.delete(container)
+    const { style } = container
+
+    if (
+      style.position === "relative" &&
+      style.getPropertyPriority("position") === active.appliedPriority
+    ) {
+      style.setProperty("position", active.value, active.priority)
+    }
+  }
+}
+
 /** Computed lengths are pixels; non-rendered elements can return "auto". */
 function pixels(value: string): number {
   return Number(value.replace(/px$/u, "")) || 0
 }
 
 /** Own a responsive canvas without stretching its previous bitmap during resize. */
-export function createCanvas(container: HTMLElement) {
-  if (container.localName === "canvas") {
+export function createCanvas(container: HTMLElement | ShadowRoot) {
+  if ("localName" in container && container.localName === "canvas") {
     throw new TypeError("snow() expects a container, not a canvas.")
   }
 
@@ -24,6 +90,7 @@ export function createCanvas(container: HTMLElement) {
     transform-origin: 0 0;
   `
   let pixelRatio = 0
+  let releasePosition: (() => void) | undefined
 
   return {
     canvas,
@@ -56,6 +123,15 @@ export function createCanvas(container: HTMLElement) {
       canvas.height = Math.round(height * pixelRatio)
 
       return { width, height }
+    },
+    mount() {
+      releasePosition = positionContainer(container)
+      container.append(canvas)
+    },
+    remove() {
+      canvas.remove()
+      releasePosition?.()
+      releasePosition = undefined
     },
   }
 }

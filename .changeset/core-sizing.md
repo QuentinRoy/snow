@@ -2,9 +2,9 @@
 "@quentinroy/snow": major
 ---
 
-`snow()` now accepts an HTML container instead of a canvas. Give the container a drawing area and containing block (usually `position: relative`); Snow creates and owns a decorative canvas inside it. Replace `snow(canvas, options)` with `snow(container, options)`. Canvas inputs are rejected.
+`snow()` now accepts an HTML container instead of a canvas. Give the container a drawing area; Snow creates and owns a decorative canvas inside it. Replace `snow(canvas, options)` with `snow(container, options)`. Canvas inputs are rejected. A `ShadowRoot` is also accepted: the canvas mounts directly inside it, and the host supplies sizing and automatic positioning.
 
-One `ResizeObserver` watches the owned canvas. Snow fills the container's padding box, including padding, without changing the container's styles or contributing to its layout size. Responsive CSS, `object-fit: none`, and pixel-density scaling keep the previous bitmap unscaled until resize delivery; Snow then resizes the bitmap and redraws, even while paused. A resolution watcher handles pixel-density changes. Existing content or CSS layout can determine the container's size; explicit dimensions are optional.
+One `ResizeObserver` watches the owned canvas. Snow fills the container's padding box, including padding, without contributing to its layout size. Static containers get `position: relative`; existing positioning is preserved, and the previous inline position is restored after the last animation is disposed unless the consumer has changed it. Responsive CSS, `object-fit: none`, and pixel-density scaling keep the previous bitmap unscaled until resize delivery; Snow then resizes the bitmap and redraws, even while paused. A resolution watcher handles pixel-density changes. Existing content or CSS layout can determine the container's size; explicit dimensions are optional.
 
 A resize keeps flakes in the area the old and new sizes share and drops the rest. When a paused animation grows, `fillMode: "instant"` fills the new area right away, and `"none"` leaves it empty until playback resumes.
 

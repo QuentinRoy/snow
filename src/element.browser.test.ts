@@ -111,6 +111,8 @@ test("renders one decorative canvas in an open shadow root", () => {
   const canvases = element.shadowRoot?.querySelectorAll("canvas")
   expect(canvases).toHaveLength(1)
   expect(canvases?.[0]?.getAttribute("aria-hidden")).toBe("true")
+  expect(canvases?.[0]?.parentNode).toBe(element.shadowRoot)
+  expect(element.shadowRoot?.children).toHaveLength(1)
 })
 
 test("receives pointer events like an image does", () => {
@@ -996,21 +998,32 @@ test.each(["content-box", "border-box"])(
   },
 )
 
-test("adopts shared styles in the destination document", async () => {
-  const frame = document.createElement("iframe")
-  document.body.append(frame)
-  const target = frame.contentDocument
+test.each(["first connection", "reconnection"])(
+  "adopts shared styles in the destination document on %s",
+  async (connection) => {
+    const frame = document.createElement("iframe")
+    document.body.append(frame)
+    const target = frame.contentDocument
 
-  if (target === null) {
-    throw new Error("The frame has no document.")
-  }
+    if (target === null) {
+      throw new Error("The frame has no document.")
+    }
 
-  const element = mount({ width: "200", height: "100", paused: "" })
-  target.body.append(element)
-  expect(sizeOf(element)).toEqual({ width: 200, height: 100 })
-  const canvas = element.shadowRoot?.querySelector("canvas")
-  await expect.poll(() => canvas?.width).toBe(200 * devicePixelRatio)
-})
+    const element = new SnowElement()
+    element.width = 200
+    element.height = 100
+    element.paused = true
+
+    if (connection === "reconnection") {
+      document.body.append(element)
+    }
+
+    target.body.append(element)
+    expect(sizeOf(element)).toEqual({ width: 200, height: 100 })
+    const canvas = element.shadowRoot?.querySelector("canvas")
+    await expect.poll(() => canvas?.width).toBe(200 * devicePixelRatio)
+  },
+)
 
 test("stays paused when put back while the author has it paused", () => {
   const drawing = stubDrawing()
@@ -1197,7 +1210,7 @@ test("keeps content-driven wrapper layout and styles unchanged", async () => {
 
 test("removes its canvas when initial sizing fails", () => {
   const container = document.createElement("div")
-  container.style.cssText = "position: relative; width: 200px; height: 100px"
+  container.style.cssText = "width: 200px; height: 100px"
   document.body.append(container)
   const inlineStyle = container.getAttribute("style")
 
@@ -1221,4 +1234,69 @@ test.each([0.8, 1.25, 2])("does not enlarge scrollable overflow at density %s", 
     container.clientHeight,
   ])
   animation.dispose()
+})
+
+test("keeps automatic positioning until the last animation is disposed", () => {
+  const container = document.createElement("div")
+  container.style.cssText = "width: 200px; height: 100px; padding: 10px"
+  document.body.append(container)
+  const first = snow(container, { density: 0, paused: true })
+  const second = snow(container, { density: 0, paused: true })
+  const canvas = container.querySelector("canvas")
+
+  expect(container.style.position).toBe("relative")
+  expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
+  first.dispose()
+  expect(container.style.position).toBe("relative")
+  expect(container.querySelectorAll("canvas")).toHaveLength(1)
+  second.dispose()
+  expect(container.style.position).toBe("")
+  expect(container.querySelectorAll("canvas")).toHaveLength(0)
+})
+
+test("positions a shadow root's host and restores its original inline priority", () => {
+  const host = document.createElement("div")
+  host.style.cssText = "position: static !important; width: 200px; height: 100px; padding: 10px"
+  const root = host.attachShadow({ mode: "open" })
+  document.body.append(host)
+  const animation = snow(root, { density: 0, paused: true })
+  const canvas = root.querySelector("canvas")
+
+  expect(canvas?.parentNode).toBe(root)
+  expect(host.children).toHaveLength(0)
+  expect(getComputedStyle(host).position).toBe("relative")
+  expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
+  animation.dispose()
+  expect(root.children).toHaveLength(0)
+  expect(host.style.position).toBe("static")
+  expect(host.style.getPropertyPriority("position")).toBe("important")
+})
+
+test("preserves consumer style changes when automatic positioning is released", () => {
+  const container = document.createElement("div")
+  container.style.cssText = "width: 200px; height: 100px"
+  document.body.append(container)
+  const animation = snow(container, { paused: true })
+  container.style.position = "fixed"
+  container.style.padding = "10px"
+  animation.dispose()
+
+  expect(container.style.position).toBe("fixed")
+  expect(container.style.padding).toBe("10px")
+})
+
+test("positions a container despite an important static stylesheet rule", () => {
+  const sheet = document.createElement("style")
+  sheet.textContent = ".snow-static { position: static !important; }"
+  const container = document.createElement("div")
+  container.className = "snow-static"
+  container.style.cssText = "width: 200px; height: 100px"
+  document.body.append(sheet, container)
+  const animation = snow(container, { paused: true })
+
+  expect(getComputedStyle(container).position).toBe("relative")
+  animation.dispose()
+  expect(container.style.position).toBe("")
+  expect(container.style.getPropertyPriority("position")).toBe("")
+  expect(getComputedStyle(container).position).toBe("static")
 })

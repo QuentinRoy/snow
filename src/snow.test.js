@@ -89,7 +89,15 @@ function setupAnimation(options, random, pixelRatio = 1, factory = createSnow) {
     setTransform: vi.fn(),
   }
 
-  const style = { padding: "0px", position: "static" }
+  const style = {
+    getPropertyPriority: () => "",
+    padding: "0px",
+    position: "static",
+    /** @param {string} name Property name. @param {string} value Property value. */
+    setProperty(name, value) {
+      Reflect.set(style, name, value)
+    },
+  }
 
   const canvas = {
     getContext: vi.fn().mockReturnValue(context),
@@ -112,6 +120,7 @@ function setupAnimation(options, random, pixelRatio = 1, factory = createSnow) {
 
   vi.stubGlobal("getComputedStyle", (target) => ({
     height: `${container.clientHeight * (target === canvas ? Number(canvas.style.height.replace("%", "")) / 100 : 1)}px`,
+    position: target === container ? style.position : "absolute",
     width: `${container.clientWidth * (target === canvas ? Number(canvas.style.width.replace("%", "")) / 100 : 1)}px`,
   }))
 
@@ -255,13 +264,13 @@ test.each([
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
 })
 
-test("observes only its canvas and leaves the consumer's styles untouched", () => {
+test("observes only its canvas and restores automatic positioning on disposal", () => {
   const { canvas, container, observers, snow } = setupAnimation()
   expect(observers).toHaveLength(1)
   expect(observers[0].observe).toHaveBeenCalledExactlyOnceWith(canvas)
-  expect(container.style).toEqual({ padding: "0px", position: "static" })
+  expect(container.style).toMatchObject({ padding: "0px", position: "relative" })
   snow.dispose()
-  expect(container.style).toEqual({ padding: "0px", position: "static" })
+  expect(container.style).toMatchObject({ padding: "0px", position: "static" })
 })
 
 test("updates pixel density while paused without moving flakes", () => {

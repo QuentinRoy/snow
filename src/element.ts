@@ -144,16 +144,10 @@ export class SnowElement extends SnowElementBase {
     )
   }
 
-  readonly #surface = document.createElement("div")
   readonly #root = this.attachShadow({ mode: "open" })
   readonly #reducedMotion = matchMedia("(prefers-reduced-motion: reduce)")
   #animation: SnowAnimation | undefined
   #setDimensions: ReturnType<typeof adoptStyles>
-
-  constructor() {
-    super()
-    this.#root.append(this.#surface)
-  }
 
   attributeChangedCallback(): void {
     this.#setDimensions?.(this.width, this.height)
@@ -164,7 +158,7 @@ export class SnowElement extends SnowElementBase {
     this.#setDimensions = adoptStyles(this.#root)
     this.#setDimensions?.(this.width, this.height)
     this.#reducedMotion.addEventListener("change", this.#syncPlayback)
-    this.#animation ??= snow(this.#surface, { ...this.#readOptions(), paused: true })
+    this.#animation ??= snow(this.#root, { ...this.#readOptions(), paused: true })
     this.#syncPlayback()
   }
 

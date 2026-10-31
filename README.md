@@ -134,7 +134,7 @@ The canvas lives in an open shadow root and is hidden from assistive technology.
 Use the function with a container sized by your CSS. Snow creates and owns its canvas:
 
 ```html
-<div id="snow-container" style="position: relative; width: 800px; height: 600px"></div>
+<div id="snow-container" style="width: 800px; height: 600px"></div>
 ```
 
 Run this code in the browser after the container exists, using your application's bundler:
@@ -152,11 +152,13 @@ The options argument is optional. Call `snow(container)` to use the defaults.
 
 Snow fills the container's padding box: everything inside the border, including padding. It observes its own canvas with one `ResizeObserver` and redraws after size changes, including while paused. Its responsive CSS keeps the previous bitmap unscaled until redraw, so resizing does not stretch the flakes. A screen-resolution watcher updates the drawing when pixel density changes, including in vertical writing modes.
 
-The container must establish the canvas's containing block; `position: relative` is the usual choice. Snow leaves the container's styles unchanged. Its absolutely positioned canvas adds no layout height, so the container gets its size from existing content, CSS layout, dimensions, or `aspect-ratio`. Explicit width and height are optional when layout already provides a drawing area. An empty container with no height or padding has no visible snow area. Existing children are preserved, and the decorative canvas ignores pointer events. Use the container's `overflow` when you want clipping to rounded corners. Leave the owned canvas's styles and bitmap dimensions to Snow.
+Snow sets `position: relative` on static containers and preserves other positioning. When the last animation is disposed, it restores the previous inline position unless your code has changed it. Its absolutely positioned canvas adds no layout height, so the container gets its size from existing content, CSS layout, dimensions, or `aspect-ratio`. Explicit width and height are optional when layout already provides a drawing area. An empty container with no height or padding has no visible snow area. Existing children are preserved, and the decorative canvas ignores pointer events. Use the container's `overflow` when you want clipping to rounded corners. Leave the owned canvas's styles and bitmap dimensions to Snow.
 
 Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills newly exposed space at once; with `"none"`, it stays empty until flakes drift in.
 
-For migration to 1.0, replace the canvas passed to `snow()` with a container that supplies a drawing area and containing block. Canvas inputs are rejected; Snow now creates and removes the canvas itself.
+You can also pass a `ShadowRoot`. Snow appends the canvas directly inside it and uses the host for sizing and automatic positioning.
+
+For migration to 1.0, replace the canvas passed to `snow()` with a container that supplies a drawing area. Canvas inputs are rejected; Snow now creates and removes the canvas itself.
 
 ### Without a bundler
 
@@ -170,10 +172,7 @@ Load `snow()` directly from jsDelivr using a browser module. Save this as an HTM
     <title>Snow</title>
   </head>
   <body>
-    <div
-      id="snow-container"
-      style="position: relative; width: 800px; height: 600px; background: #172033"
-    ></div>
+    <div id="snow-container" style="width: 800px; height: 600px; background: #172033"></div>
     <script type="module">
       import { snow } from "https://cdn.jsdelivr.net/npm/@quentinroy/snow/dist/snow.js"
 
@@ -231,7 +230,7 @@ Size, speed, direction, and color changes apply to new arrivals. Visible flakes 
 
 ## Stopping for good
 
-Call `dispose()` when you no longer need the animation, for example before removing the container. It cancels the scheduled frame, stops watching the container, and removes its canvas. After that, a second `dispose()`, changing `paused`, and resizing the container do nothing.
+Call `dispose()` when you no longer need the animation, for example before removing the container. It cancels the scheduled frame, stops observation, removes its canvas, and releases automatic positioning. After that, a second `dispose()`, changing `paused`, and resizing the container do nothing.
 
 ```js
 animation.dispose()

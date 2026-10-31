@@ -48,8 +48,9 @@ export interface SnowSettings {
 /** A running snow animation: its settings, plus teardown. */
 export interface SnowAnimation extends SnowSettings {
   /**
-   * Stop the animation for good: cancel the scheduled frame, stop watching the container, and remove
-   * the owned canvas. Later calls and `paused` changes do nothing.
+   * Stop the animation for good: cancel the scheduled frame, disconnect observation, and remove
+   * the owned canvas. Release automatic container positioning when no animation needs it.
+   * Later calls and `paused` changes do nothing.
    */
   dispose: () => void
   /** Same as `dispose()`, so `using animation = snow(container)` disposes at the end of the scope. */
@@ -87,10 +88,10 @@ const numericSettingKeys = [
  * The `"instant"` fill mode seeds the canvas at startup and on growth. Later flakes enter through
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
- * The container supplies its layout size and containing block (usually `position: relative`).
- * Snow fills its padding box, creates its own canvas, and removes that canvas on disposal.
+ * Size the container with CSS. Snow positions static containers and fills their padding box.
+ * A shadow root uses its host for sizing and positioning. Snow owns and removes its canvas.
  */
-export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimation {
+export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions): SnowAnimation {
   const surface = createCanvas(container)
   const { canvas } = surface
   const context = canvas.getContext("2d")
@@ -354,7 +355,7 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
     stopFrames()
     context.clearRect(0, 0, canvas.width, canvas.height)
-    canvas.remove()
+    surface.remove()
   }
 
   const animation: SnowAnimation = {
@@ -381,9 +382,9 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
   }
 
   validateSettings()
-  container.append(canvas)
 
   try {
+    surface.mount()
     resize()
     resizeObserver.observe(canvas)
     watchPixelRatio()

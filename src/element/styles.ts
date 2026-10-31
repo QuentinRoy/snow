@@ -11,11 +11,6 @@ const styles = `
     min-width: 0;
     min-height: 0;
   }
-  div {
-    position: absolute;
-    inset: 0;
-    display: block;
-  }
 `
 
 /** Adopt shared rules and return a setter for this element's shadow-scoped dimensions. */
