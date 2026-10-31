@@ -8,30 +8,6 @@ import type { SnowAnimation, SnowSettings } from "./snow.ts"
 const defaultWidth = 300
 const defaultHeight = 150
 
-// Every core option except `paused`, which the element combines with reduced motion and whether it
-// is connected before passing it on.
-const optionNames = [
-  "density",
-  "fillMode",
-  "flakeColor",
-  "flakeDirection",
-  "flakeDirectionDeviation",
-  "flakeSize",
-  "flakeSizeDeviation",
-  "flakeSpeed",
-  "flakeSpeedDeviation",
-  "showFps",
-] as const satisfies readonly (keyof SnowSettings)[]
-
-const additionalAttributeNames = ["height", "ignoreReducedMotion", "paused", "width"] as const
-
-const observeAttributes = [...optionNames, ...additionalAttributeNames].map((name) =>
-  name
-    .split(/(?=[A-Z])/u)
-    .join("-")
-    .toLowerCase(),
-)
-
 const SnowElementBase = WithAttributeProps(HTMLElement, {
   density: finiteNumber({ default: defaultSettings.density, min: 0 }),
   fillMode: pickList({ values: ["instant", "none"], default: "instant" }),
@@ -48,6 +24,34 @@ const SnowElementBase = WithAttributeProps(HTMLElement, {
   showFps: boolean(),
   width: dimension({ default: defaultWidth }),
 })
+
+// Match the mixin's camelCase-to-kebab-case attribute names.
+type KebabCase<Name extends string> = Name extends `${infer Head}${infer Tail}`
+  ? Head extends Lowercase<Head>
+    ? `${Head}${Tail extends Uncapitalize<Tail> ? "" : "-"}${KebabCase<Tail>}`
+    : `${Lowercase<Head>}${KebabCase<Tail>}`
+  : Name
+
+type AttributeName = KebabCase<
+  Exclude<keyof InstanceType<typeof SnowElementBase>, keyof HTMLElement>
+>
+
+const observeAttributes = [
+  "density",
+  "fill-mode",
+  "flake-color",
+  "flake-direction",
+  "flake-direction-deviation",
+  "flake-size",
+  "flake-size-deviation",
+  "flake-speed",
+  "flake-speed-deviation",
+  "show-fps",
+  "height",
+  "ignore-reduced-motion",
+  "paused",
+  "width",
+] as const satisfies readonly AttributeName[]
 
 /** Snowfall drawn on a canvas inside an open shadow root. */
 export class SnowElement extends SnowElementBase {
