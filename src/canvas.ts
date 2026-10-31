@@ -3,21 +3,8 @@ const positions = new WeakMap<
   { count: number; value: string; priority: string; appliedPriority: string }
 >()
 
-/** Use the namespace so hosts adopted from another window remain valid. */
-function isHTMLHost(element: Element): element is HTMLElement {
-  return element.namespaceURI === "http://www.w3.org/1999/xhtml"
-}
-
 /** Keep automatic positioning until the last animation releases this container. */
-function positionContainer(container: HTMLElement | ShadowRoot): (() => void) | undefined {
-  if ("host" in container) {
-    if (!isHTMLHost(container.host)) {
-      throw new TypeError("snow() requires an HTML shadow host.")
-    }
-
-    return positionContainer(container.host)
-  }
-
+function positionContainer(container: HTMLElement): (() => void) | undefined {
   let position = positions.get(container)
 
   if (position === undefined) {
@@ -70,25 +57,25 @@ function pixels(value: string): number {
 }
 
 /** Own a responsive canvas without stretching its previous bitmap during resize. */
-export function createCanvas(container: HTMLElement | ShadowRoot) {
-  if ("localName" in container && container.localName === "canvas") {
+export function createCanvas(host: HTMLElement) {
+  if (host.localName === "canvas") {
     throw new TypeError("snow() expects a container, not a canvas.")
   }
 
-  const canvas = container.ownerDocument.createElement("canvas")
+  const canvas = host.ownerDocument.createElement("canvas")
   canvas.setAttribute("aria-hidden", "true")
-  canvas.style.cssText = `
-    all: unset;
-    display: block;
-    pointer-events: none;
-    position: absolute;
-    left: 0;
-    top: 0;
-    object-fit: none;
-    object-position: 0 0;
-    overflow: clip;
-    transform-origin: 0 0;
-  `
+  Object.assign(canvas.style, {
+    all: "unset",
+    display: "block",
+    pointerEvents: "none",
+    position: "absolute",
+    left: 0,
+    top: 0,
+    objectFit: "none",
+    objectPosition: "0 0",
+    overflow: "clip",
+    transformOrigin: "0 0",
+  })
   let pixelRatio = 0
   let releasePosition: (() => void) | undefined
   let needsPositioning = true
@@ -99,8 +86,8 @@ export function createCanvas(container: HTMLElement | ShadowRoot) {
       return needsPositioning
     },
     resize(box?: Pick<DOMRectReadOnly, "width" | "height">) {
-      if (needsPositioning && container.isConnected) {
-        releasePosition = positionContainer(container)
+      if (needsPositioning && host.isConnected) {
+        releasePosition = positionContainer(host)
         needsPositioning = false
       }
 
@@ -110,9 +97,11 @@ export function createCanvas(container: HTMLElement | ShadowRoot) {
         pixelRatio = devicePixelRatio
         // The CSS box uses bitmap pixels. Scale it back to CSS pixels while object-fit:none
         // keeps the previous bitmap unscaled until the resize observer redraws it.
-        canvas.style.width = `${100 * pixelRatio}%`
-        canvas.style.height = `${100 * pixelRatio}%`
-        canvas.style.transform = `scale(${1 / pixelRatio})`
+        Object.assign(canvas.style, {
+          width: `${100 * pixelRatio}%`,
+          height: `${100 * pixelRatio}%`,
+          transform: `scale(${1 / pixelRatio})`,
+        })
       }
 
       let width: number

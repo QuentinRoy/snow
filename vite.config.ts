@@ -62,7 +62,7 @@ export default defineConfig({
     },
     platform: "browser",
     sourcemap: true,
-    target: "es2020",
+    target: "es2022",
   },
   test: {
     projects: [

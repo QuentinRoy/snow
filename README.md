@@ -156,8 +156,6 @@ Snow sets `position: relative` on static containers and preserves other position
 
 Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills newly exposed space at once; with `"none"`, it stays empty until flakes drift in.
 
-You can also pass a `ShadowRoot`. Snow appends the canvas directly inside it and uses the host for sizing and automatic positioning.
-
 For migration to 1.0, replace the canvas passed to `snow()` with a container that supplies a drawing area. Canvas inputs are rejected; Snow now creates and removes the canvas itself.
 
 ### Without a bundler

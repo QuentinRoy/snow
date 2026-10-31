@@ -89,10 +89,10 @@ const numericSettingKeys = [
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
  * Size the container with CSS. Snow positions static containers and fills their padding box.
- * A shadow root uses its host for sizing and positioning. Snow owns and removes its canvas.
+ * Snow owns and removes its canvas.
  */
-export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions): SnowAnimation {
-  const surface = createCanvas(container)
+export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
+  const surface = createCanvas(host)
   const { canvas } = surface
   const context = canvas.getContext("2d")
 
@@ -331,14 +331,14 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
 
     watchPixelRatio()
 
-    if (container.isConnected) {
+    if (host.isConnected) {
       resize()
     }
   }
 
   const resizeObserver = new ResizeObserver((entries) => {
     // A container off the page reports an empty size, which would drop every flake.
-    if (isDisposed || !container.isConnected) {
+    if (isDisposed || !host.isConnected) {
       return
     }
 
@@ -349,7 +349,7 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
         positioningFrameId = null
 
         if (!isDisposed) {
-          if (container.isConnected) {
+          if (host.isConnected) {
             resize()
             positioningPending = false
           }
@@ -375,7 +375,6 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
 
     if (positioningPending) {
       // A zero-sized ancestor can keep the canvas empty even after a sized host is inserted.
-      const host = "host" in container ? container.host : container
       resizeObserver.observe(host, { box: "border-box" })
     }
   }
@@ -425,7 +424,7 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
   validateSettings()
 
   try {
-    container.append(canvas)
+    host.append(canvas)
     resize()
     positioningPending = surface.needsPositioning
     observeSize()

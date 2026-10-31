@@ -111,7 +111,8 @@ test("renders one decorative canvas in an open shadow root", () => {
   const canvases = element.shadowRoot?.querySelectorAll("canvas")
   expect(canvases).toHaveLength(1)
   expect(canvases?.[0]?.getAttribute("aria-hidden")).toBe("true")
-  expect(canvases?.[0]?.parentNode).toBe(element.shadowRoot)
+  expect(canvases?.[0]?.parentElement?.localName).toBe("div")
+  expect(canvases?.[0]?.parentElement?.parentNode).toBe(element.shadowRoot)
   expect(element.shadowRoot?.children).toHaveLength(1)
 })
 
@@ -1254,20 +1255,19 @@ test("keeps automatic positioning until the last animation is disposed", () => {
   expect(container.querySelectorAll("canvas")).toHaveLength(0)
 })
 
-test("positions a shadow root's host and restores its original inline priority", () => {
+test("positions a static container and restores its original inline priority", () => {
   const host = document.createElement("div")
   host.style.cssText = "position: static !important; width: 200px; height: 100px; padding: 10px"
-  const root = host.attachShadow({ mode: "open" })
   document.body.append(host)
-  const animation = snow(root, { density: 0, paused: true })
-  const canvas = root.querySelector("canvas")
+  const animation = snow(host, { density: 0, paused: true })
+  const canvas = host.querySelector("canvas")
 
-  expect(canvas?.parentNode).toBe(root)
-  expect(host.children).toHaveLength(0)
+  expect(canvas?.parentNode).toBe(host)
+  expect(host.children).toHaveLength(1)
   expect(getComputedStyle(host).position).toBe("relative")
   expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
   animation.dispose()
-  expect(root.children).toHaveLength(0)
+  expect(host.children).toHaveLength(0)
   expect(host.style.position).toBe("static")
   expect(host.style.getPropertyPriority("position")).toBe("important")
 })
