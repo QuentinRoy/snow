@@ -5,6 +5,6 @@ test("registering snow-fall throws when another class already owns the name", as
 
   customElements.define("snow-fall", Other)
 
-  await expect(import("./element-register.ts")).rejects.toThrow()
+  await expect(import("./register.ts")).rejects.toThrow()
   expect(customElements.get("snow-fall")).toBe(Other)
 })

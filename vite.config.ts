@@ -53,15 +53,11 @@ export default defineConfig({
     // The mixin library is a devDependency; bundle it so users need nothing extra.
     deps: { alwaysBundle: ["@quentinroy/custom-element-mixins"] },
     dts: { sourcemap: true },
-    entry: {
-      element: "src/element.ts",
-      "element/register": "src/element-register.ts",
-      snow: "src/snow.ts",
-    },
+    entry: ["src/snow.ts", "src/element.ts", "src/element/register.ts"],
     hash: false,
     // Preserve imports between public entries instead of generating facade modules.
     inputOptions: {
-      external: ["./snow.js", "./element.js"],
+      external: ["./snow.js", "../element.js"],
       transform: { typescript: { rewriteImportExtensions: true } },
     },
     platform: "browser",
