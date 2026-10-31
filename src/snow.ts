@@ -87,7 +87,8 @@ const numericSettingKeys = [
  * The `"instant"` fill mode seeds the canvas at startup and on growth. Later flakes enter through
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
- * Size the container with CSS. Snow creates its own canvas and removes it on disposal.
+ * The container supplies its layout size and containing block (usually `position: relative`).
+ * Snow fills its padding box, creates its own canvas, and removes that canvas on disposal.
  */
 export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimation {
   const surface = createCanvas(container)
@@ -242,12 +243,9 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
    * Match the canvas resolution to its displayed size, then redraw without advancing time.
    * Setting the resolution erases the bitmap, so the redraw is required.
    */
-  const resize = (
-    box?: Pick<DOMRectReadOnly, "width" | "height" | "x" | "y">,
-    devicePixelSize?: ResizeObserverSize,
-  ): void => {
+  const resize = (box?: Pick<DOMRectReadOnly, "width" | "height">): void => {
     validateSettings()
-    const { width: cssWidth, height: cssHeight } = surface.resize(box, devicePixelSize)
+    const { width: cssWidth, height: cssHeight } = surface.resize(box)
     applyLayout(cssWidth, cssHeight)
     render()
   }
@@ -341,12 +339,8 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
       return
     }
 
-    for (const { contentRect, devicePixelContentBoxSize } of entries) {
-      if (devicePixelContentBoxSize?.[0] === undefined && pixelRatioQuery === undefined) {
-        watchPixelRatio()
-      }
-
-      resize(contentRect, devicePixelContentBoxSize?.[0])
+    for (const { contentRect } of entries) {
+      resize(contentRect)
     }
   })
 
@@ -386,21 +380,20 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
     [Symbol.dispose]: dispose,
   }
 
-  resize()
+  validateSettings()
   surface.mount()
 
   try {
-    // Device-pixel boxes also report a change of `devicePixelRatio` alone, such as a zoom or a move
-    // to another monitor, which leaves the CSS size unchanged.
-    resizeObserver.observe(container, { box: "device-pixel-content-box" })
-  } catch {
-    // Browsers without device-pixel boxes reject the option.
-    resizeObserver.observe(container)
+    resize()
+    resizeObserver.observe(canvas)
     watchPixelRatio()
-  }
 
-  if (!isPaused) {
-    startFrames()
+    if (!isPaused) {
+      startFrames()
+    }
+  } catch (error) {
+    dispose()
+    throw error
   }
 
   return animation

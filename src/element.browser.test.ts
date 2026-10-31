@@ -197,10 +197,10 @@ test("sizes the canvas bitmap from the displayed size", async () => {
 })
 
 test.each(["factory", "element"])(
-  "keeps the %s canvas unscaled until its container resize is delivered",
+  "updates the %s canvas box before redrawing its bitmap on resize",
   async (mode) => {
     const container = mode === "element" ? new SnowElement() : document.createElement("div")
-    container.style.cssText = "width: 200px; height: 100px"
+    container.style.cssText = "position: relative; width: 200px; height: 100px"
 
     if (container instanceof SnowElement) {
       container.setAttribute("paused", "")
@@ -217,11 +217,10 @@ test.each(["factory", "element"])(
     await expect.poll(() => canvas.width).toBe(200 * devicePixelRatio)
 
     const resize = async (width: number, height: number): Promise<void> => {
-      const previousSize = sizeOf(canvas)
       const previousBitmap = [canvas.width, canvas.height]
       container.style.width = `${width}px`
       container.style.height = `${height}px`
-      expect(sizeOf(canvas)).toEqual(previousSize)
+      expect(sizeOf(canvas)).toEqual({ width, height })
       expect([canvas.width, canvas.height]).toEqual(previousBitmap)
       await expect.poll(() => canvas.width).toBe(width * devicePixelRatio)
       expect(sizeOf(canvas)).toEqual({ width, height })
@@ -239,7 +238,8 @@ test("keeps physical bitmap dimensions in vertical writing modes", async () => {
   const element = mount({ height: "50", width: "200", paused: "" }, "writing-mode: vertical-rl")
   const elementCanvas = element.shadowRoot?.querySelector("canvas")
   const container = document.createElement("div")
-  container.style.cssText = "width: 200px; height: 50px; writing-mode: vertical-lr"
+  container.style.cssText =
+    "position: relative; width: 200px; height: 50px; writing-mode: vertical-lr"
   document.body.append(container)
   const animation = snow(container, { paused: true })
   const canvas = container.querySelector("canvas")
@@ -960,7 +960,7 @@ test.each(["content-box", "border-box"])(
   "sizes and positions the canvas inside a padded %s container",
   async (boxSizing) => {
     const container = document.createElement("div")
-    container.style.cssText = `width: 200px; height: 100px; padding: 7px 11px; border: 3px solid; box-sizing: ${boxSizing}`
+    container.style.cssText = `position: relative; width: 200px; height: 100px; padding: 7px 11px; border: 3px solid; box-sizing: ${boxSizing}`
     const child = document.createElement("span")
     container.append(child)
     document.body.append(container)
@@ -971,14 +971,14 @@ test.each(["content-box", "border-box"])(
       throw new Error("The container has no canvas.")
     }
 
-    const width = boxSizing === "border-box" ? 172 : 200
-    const height = boxSizing === "border-box" ? 80 : 100
+    const width = boxSizing === "border-box" ? 194 : 222
+    const height = boxSizing === "border-box" ? 94 : 114
 
     const checkGeometry = (): void => {
       expect(sizeOf(canvas)).toEqual({ height, width })
       const outer = container.getBoundingClientRect()
       const inner = canvas.getBoundingClientRect()
-      expect([inner.left - outer.left, inner.top - outer.top]).toEqual([14, 10])
+      expect([inner.left - outer.left, inner.top - outer.top]).toEqual([3, 3])
       expect([canvas.width, canvas.height]).toEqual([
         width * devicePixelRatio,
         height * devicePixelRatio,
@@ -987,12 +987,12 @@ test.each(["content-box", "border-box"])(
 
     checkGeometry()
     await expect.poll(() => canvas.width).toBe(width * devicePixelRatio)
-    await expect.poll(() => getComputedStyle(canvas).left).toBe("11px")
+    await expect.poll(() => getComputedStyle(canvas).left).toBe("0px")
     checkGeometry()
     animation.dispose()
     expect(container.children).toHaveLength(1)
     expect(container.firstElementChild).toBe(child)
-    expect(container.style.position).toBe("")
+    expect(container.style.position).toBe("relative")
   },
 )
 
@@ -1029,4 +1029,196 @@ test("does not listen to reduced motion changes while removed", async () => {
   await emulateReducedMotion(false)
 
   expect(isAnimating(drawing)).toBe(false)
+})
+
+test("fills changing padding without modifying the consumer's styles or layout", async () => {
+  const container = document.createElement("div")
+  container.style.cssText =
+    "position: relative; width: 200px; height: 100px; padding: 10px; border: 3px solid"
+  document.body.append(container)
+  const before = sizeOf(container)
+  const animation = snow(container, { paused: true })
+  const canvas = container.querySelector("canvas")
+
+  if (canvas === null) {
+    throw new Error("The container has no canvas.")
+  }
+
+  await expect.poll(() => sizeOf(canvas)).toEqual({ height: 120, width: 220 })
+  expect(sizeOf(container)).toEqual(before)
+  expect(canvas.parentElement).toBe(container)
+  expect(container.children).toHaveLength(1)
+  const inlineStyle = container.getAttribute("style")
+  container.style.padding = "30px 50px"
+  const changedStyle = container.getAttribute("style")
+
+  await expect.poll(() => sizeOf(canvas)).toEqual({ height: 160, width: 300 })
+  await expect.poll(() => canvas.width).toBe(300 * devicePixelRatio)
+  const outer = container.getBoundingClientRect()
+  const inner = canvas.getBoundingClientRect()
+  expect([inner.left - outer.left, inner.top - outer.top]).toEqual([3, 3])
+  expect(container.getAttribute("style")).toBe(changedStyle)
+  expect(inlineStyle).not.toBe(changedStyle)
+  animation.dispose()
+  expect(container.getAttribute("style")).toBe(changedStyle)
+  expect(container.children).toHaveLength(0)
+})
+
+test.each(["factory", "element"])(
+  "keeps the %s bitmap pixels fixed before resize delivery",
+  async (mode) => {
+    const NativeResizeObserver = ResizeObserver
+    let hold = false
+    vi.stubGlobal(
+      "ResizeObserver",
+      class extends NativeResizeObserver {
+        constructor(onResize: ResizeObserverCallback) {
+          super((entries, observer) => {
+            if (!hold) {
+              onResize(entries, observer)
+            }
+          })
+        }
+      },
+    )
+    const container = mode === "element" ? new SnowElement() : document.createElement("div")
+    container.style.cssText = "position: relative; width: 200px; height: 100px; background: black"
+
+    if (container instanceof SnowElement) {
+      container.paused = true
+      container.density = 0
+    }
+
+    document.body.append(container)
+    const animation = mode === "factory" ? snow(container, { density: 0, paused: true }) : undefined
+    const canvas = (container.shadowRoot ?? container).querySelector("canvas")
+    const context = canvas?.getContext("2d")
+
+    if (canvas === null || context === null || context === undefined) {
+      throw new Error("The animation has no drawing context.")
+    }
+
+    await expect.poll(() => canvas.width).toBe(200 * devicePixelRatio)
+    await settle()
+    hold = true
+    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
+    context.fillStyle = "red"
+    context.fillRect(25, 20, 5, 30)
+
+    const stripe = async (): Promise<number[]> => {
+      const { left, top } = container.getBoundingClientRect()
+      const frame = window.frameElement?.getBoundingClientRect()
+
+      const { data } = await cdp().send("Page.captureScreenshot", {
+        clip: {
+          height: 1,
+          scale: 1,
+          width: 80,
+          x: left + (frame?.left ?? 0),
+          y: top + (frame?.top ?? 0) + 25,
+        },
+        format: "png",
+      })
+
+      const image = new Image()
+      image.src = `data:image/png;base64,${data}`
+      await image.decode()
+      const sample = document.createElement("canvas")
+      sample.width = image.width
+      sample.height = image.height
+      const sampleContext = sample.getContext("2d")
+
+      if (sampleContext === null) {
+        throw new Error("Could not read the screenshot.")
+      }
+
+      sampleContext.drawImage(image, 0, 0)
+      const rgba = sampleContext.getImageData(0, 0, image.width, 1).data
+      const columns: number[] = []
+
+      for (let x = 0; x < image.width; x += 1) {
+        if (rgba[x * 4] > 200 && rgba[x * 4 + 1] < 50 && rgba[x * 4 + 2] < 50) {
+          columns.push(x)
+        }
+      }
+
+      return columns
+    }
+
+    const before = await stripe()
+    expect(before.length).toBeGreaterThan(0)
+    container.style.width = "350px"
+    container.style.height = "200px"
+    expect(await stripe()).toEqual(before)
+    container.style.width = "100px"
+    container.style.height = "70px"
+    expect(await stripe()).toEqual(before)
+    animation?.dispose()
+  },
+)
+
+test("fills the custom element's padding without changing its inline styles", async () => {
+  const element = mount(
+    { paused: "" },
+    "width: 200px; height: 100px; padding: 10px; border: 3px solid",
+  )
+
+  const inlineStyle = element.getAttribute("style")
+  const canvas = element.shadowRoot?.querySelector("canvas")
+
+  await expect.poll(() => canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
+  expect(element.getAttribute("style")).toBe(inlineStyle)
+  element.style.padding = "30px 50px"
+  await expect.poll(() => canvas && sizeOf(canvas)).toEqual({ height: 160, width: 300 })
+})
+
+test("keeps content-driven wrapper layout and styles unchanged", async () => {
+  const parent = document.createElement("div")
+  parent.style.width = "400px"
+  const container = document.createElement("div")
+  container.style.position = "relative"
+  const content = document.createElement("div")
+  content.style.height = "80px"
+  container.append(content)
+  parent.append(container)
+  document.body.append(parent)
+  const before = sizeOf(container)
+  const inlineStyle = container.getAttribute("style")
+  const animation = snow(container, { paused: true })
+  const canvas = container.querySelector("canvas")
+
+  await expect.poll(() => canvas && sizeOf(canvas)).toEqual({ height: 80, width: 400 })
+  expect(sizeOf(container)).toEqual(before)
+  expect(container.getAttribute("style")).toBe(inlineStyle)
+  animation.dispose()
+  expect(container.children).toHaveLength(1)
+  expect(container.firstElementChild).toBe(content)
+})
+
+test("removes its canvas when initial sizing fails", () => {
+  const container = document.createElement("div")
+  container.style.cssText = "position: relative; width: 200px; height: 100px"
+  document.body.append(container)
+  const inlineStyle = container.getAttribute("style")
+
+  expect(() => snow(container, { density: Number.MAX_VALUE })).toThrow(RangeError)
+  expect(container.children).toHaveLength(0)
+  expect(container.getAttribute("style")).toBe(inlineStyle)
+})
+
+test.each([0.8, 1.25, 2])("does not enlarge scrollable overflow at density %s", async (ratio) => {
+  vi.stubGlobal("devicePixelRatio", ratio)
+  const container = document.createElement("div")
+  container.style.cssText =
+    "position: relative; width: 200px; height: 100px; padding: 10px; overflow: auto"
+  document.body.append(container)
+  const animation = snow(container, { paused: true })
+  const canvas = container.querySelector("canvas")
+
+  await expect.poll(() => canvas?.width).toBe(Math.round(220 * ratio))
+  expect([container.scrollWidth, container.scrollHeight]).toEqual([
+    container.clientWidth,
+    container.clientHeight,
+  ])
+  animation.dispose()
 })

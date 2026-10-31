@@ -3,9 +3,7 @@ function pixels(value: string): number {
   return Number(value.replace(/px$/u, "")) || 0
 }
 
-type ContentBox = Pick<DOMRectReadOnly, "width" | "height" | "x" | "y">
-
-/** Own a decorative canvas whose CSS size and bitmap always change together. */
+/** Own a responsive canvas without stretching its previous bitmap during resize. */
 export function createCanvas(container: HTMLElement) {
   if (container.localName === "canvas") {
     throw new TypeError("snow() expects a container, not a canvas.")
@@ -13,76 +11,57 @@ export function createCanvas(container: HTMLElement) {
 
   const canvas = container.ownerDocument.createElement("canvas")
   canvas.setAttribute("aria-hidden", "true")
-  canvas.style.cssText = "all: unset; display: block; pointer-events: none; position: absolute"
-
-  const style = getComputedStyle(container)
-  const paddingX = pixels(style.paddingLeft)
-  const paddingY = pixels(style.paddingTop)
-  let width = pixels(style.width)
-  let height = pixels(style.height)
-
-  if (style.boxSizing === "border-box") {
-    width -=
-      paddingX +
-      pixels(style.paddingRight) +
-      pixels(style.borderLeftWidth) +
-      pixels(style.borderRightWidth)
-    height -=
-      paddingY +
-      pixels(style.paddingBottom) +
-      pixels(style.borderTopWidth) +
-      pixels(style.borderBottomWidth)
-  }
-
-  let box: ContentBox = {
-    width: Math.max(0, width),
-    height: Math.max(0, height),
-    x: paddingX,
-    y: paddingY,
-  }
-
-  const previousPosition = container.style.getPropertyValue("position")
-  const previousPriority = container.style.getPropertyPriority("position")
-  const needsPosition = style.position === "static"
+  canvas.style.cssText = `
+    all: unset;
+    display: block;
+    pointer-events: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    object-fit: none;
+    object-position: 0 0;
+    overflow: clip;
+    transform-origin: 0 0;
+  `
+  let pixelRatio = 0
 
   return {
     canvas,
-    resize(nextBox: ContentBox = box, devicePixelSize?: ResizeObserverSize) {
-      box = nextBox
+    resize(box?: Pick<DOMRectReadOnly, "width" | "height">) {
+      const observedRatio = pixelRatio
 
-      const vertical =
-        devicePixelSize !== undefined && getComputedStyle(container).writingMode !== "horizontal-tb"
-
-      canvas.style.width = `${box.width}px`
-      canvas.style.height = `${box.height}px`
-      canvas.style.left = `${box.x}px`
-      canvas.style.top = `${box.y}px`
-      canvas.width =
-        (vertical ? devicePixelSize?.blockSize : devicePixelSize?.inlineSize) ??
-        Math.round(box.width * devicePixelRatio)
-      canvas.height =
-        (vertical ? devicePixelSize?.inlineSize : devicePixelSize?.blockSize) ??
-        Math.round(box.height * devicePixelRatio)
-
-      return box
-    },
-    mount() {
-      if (needsPosition) {
-        container.style.setProperty("position", "relative")
+      if (pixelRatio !== devicePixelRatio) {
+        pixelRatio = devicePixelRatio
+        // The CSS box uses bitmap pixels. Scale it back to CSS pixels while object-fit:none
+        // keeps the previous bitmap unscaled until the resize observer redraws it.
+        canvas.style.width = `${100 * pixelRatio}%`
+        canvas.style.height = `${100 * pixelRatio}%`
+        canvas.style.transform = `scale(${1 / pixelRatio})`
       }
 
+      let width: number
+      let height: number
+
+      if (box === undefined) {
+        const style = getComputedStyle(canvas)
+        width = pixels(style.width) / pixelRatio
+        height = pixels(style.height) / pixelRatio
+      } else {
+        // An entry describes the CSS box at the ratio applied when it was measured.
+        width = box.width / observedRatio
+        height = box.height / observedRatio
+      }
+
+      canvas.width = Math.round(width * pixelRatio)
+      canvas.height = Math.round(height * pixelRatio)
+
+      return { width, height }
+    },
+    mount() {
       container.append(canvas)
     },
     remove() {
       canvas.remove()
-
-      if (
-        needsPosition &&
-        container.style.getPropertyValue("position") === "relative" &&
-        container.style.getPropertyPriority("position") === ""
-      ) {
-        container.style.setProperty("position", previousPosition, previousPriority)
-      }
     },
   }
 }
