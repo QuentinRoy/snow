@@ -3,7 +3,7 @@ import { dimension, finiteNumber, pickList, string } from "./attribute-serialize
 import { defaultSettings } from "./defaults.ts"
 import { adoptStyles } from "./element/styles.ts"
 import { snow } from "./snow.ts"
-import type { SnowAnimation, SnowOptions } from "./snow.ts"
+import type { SnowAnimation, SnowSettings } from "./snow.ts"
 
 const defaultWidth = 300
 const defaultHeight = 150
@@ -21,7 +21,7 @@ const optionNames = [
   "flakeSpeed",
   "flakeSpeedDeviation",
   "showFps",
-] as const satisfies readonly (keyof SnowOptions)[]
+] as const satisfies readonly (keyof SnowSettings)[]
 
 const additionalAttributeNames = ["height", "ignoreReducedMotion", "paused", "width"] as const
 
@@ -84,8 +84,19 @@ export class SnowElement extends SnowElementBase {
     this.#syncPlayback()
   }
 
-  #readOptions(): SnowOptions {
-    return Object.fromEntries(optionNames.map((name) => [name, this[name]]))
+  #readOptions(): Omit<SnowSettings, "paused"> {
+    return {
+      density: this.density,
+      fillMode: this.fillMode,
+      flakeColor: this.flakeColor,
+      flakeDirection: this.flakeDirection,
+      flakeDirectionDeviation: this.flakeDirectionDeviation,
+      flakeSize: this.flakeSize,
+      flakeSizeDeviation: this.flakeSizeDeviation,
+      flakeSpeed: this.flakeSpeed,
+      flakeSpeedDeviation: this.flakeSpeedDeviation,
+      showFps: this.showFps,
+    }
   }
 
   #syncAnimation(): void {

@@ -57,9 +57,6 @@ export interface SnowAnimation extends SnowSettings {
   [Symbol.dispose]: () => void
 }
 
-/** Settings that override the defaults at startup. */
-export type SnowOptions = Partial<SnowSettings>
-
 /** Canvas dimensions in CSS pixels. */
 export interface CanvasSize {
   width: number
@@ -91,7 +88,7 @@ const numericSettingKeys = [
  * Size and position the container with CSS, for example `position: relative`. Snow fills its padding box.
  * Snow owns and removes its canvas.
  */
-export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
+export function snow(host: HTMLElement, options?: Partial<SnowSettings>): SnowAnimation {
   const surface = createCanvas(host)
   const { canvas } = surface
   const context = canvas.getContext("2d")
