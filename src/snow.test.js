@@ -2,6 +2,12 @@ import { afterEach, expect, test, vi } from "vite-plus/test"
 import * as snowModule from "./snow"
 import { snow as createSnow } from "./snow"
 
+/**
+ * @typedef {object} FakeEntry
+ * @property {{ height: number, width: number }} contentRect Displayed size.
+ * @property {{ blockSize: number, inlineSize: number }[] | undefined} devicePixelContentBoxSize Size in device pixels.
+ */
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -11,8 +17,56 @@ afterEach(() => {
  * Create a fake canvas and a manually advanced animation.
  * @param {Parameters<typeof createSnow>[1]} [options] Initial settings.
  * @param {() => number} [random] Random source.
+ * @param {number} [pixelRatio] Stubbed `devicePixelRatio`.
+ * @param {boolean} [rejectBoxOption] Make `observe` throw when given a `box` option, as browsers
+ * without device-pixel boxes do.
  */
-function setupAnimation(options, random) {
+function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false) {
+  vi.stubGlobal("getComputedStyle", () => ({ writingMode: "horizontal-tb" }))
+  vi.stubGlobal("devicePixelRatio", pixelRatio)
+  /** @type {Array<{ listener: (() => void) | undefined }>} */
+  const queries = []
+  vi.stubGlobal("matchMedia", () => {
+    /** @type {{ listener: (() => void) | undefined }} */
+    const query = { listener: undefined }
+    queries.unshift(query)
+
+    return {
+      /** @param {string} _type Event type. @param {() => void} listener Event listener. */
+      addEventListener: (_type, listener) => {
+        query.listener = listener
+      },
+      removeEventListener: () => {
+        query.listener = undefined
+      },
+    }
+  })
+
+  /** @type {FakeResizeObserver[]} */
+  const observers = []
+
+  class FakeResizeObserver {
+    /** @param {(entries: FakeEntry[]) => void} onResize Resize callback. */
+    constructor(onResize) {
+      this.onResize = onResize
+      /** @type {import("vite-plus/test").Mock<(target: unknown, options?: { box?: string }) => void>} */
+      this.observe = vi.fn((_target, observeOptions) => {
+        if (rejectBoxOption && observeOptions?.box !== undefined) {
+          throw new TypeError("Unsupported box.")
+        }
+      })
+      this.disconnect = vi.fn()
+      observers.push(this)
+    }
+
+    /** @param {FakeEntry[]} entries Entries to report. */
+    trigger(entries) {
+      this.onResize(entries)
+    }
+  }
+
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver)
+
   /** @type {FrameRequestCallback | undefined} */
   let nextFrame
 
@@ -70,17 +124,43 @@ function setupAnimation(options, random) {
     nextFrame?.(time)
   }
 
-  /** @param {number} width Displayed width. @param {number} height Displayed height. */
-  const resize = (width, height) => {
-    canvas.clientWidth = width
-    canvas.clientHeight = height
-    canvas.width = width
-    canvas.height = height
+  let size = { height: canvas.clientHeight, width: canvas.clientWidth }
+
+  /**
+   * Report a new displayed size through the resize observer.
+   * @param {number} width Displayed width.
+   * @param {number} height Displayed height.
+   * @param {{ blockSize: number, inlineSize: number }} [devicePixelSize] Size in device pixels.
+   */
+  const resize = (width, height, devicePixelSize) => {
+    size = { height, width }
     context.arc.mockClear()
-    snow.draw()
+    observers[0].trigger([
+      {
+        contentRect: { height, width },
+        devicePixelContentBoxSize: devicePixelSize && [devicePixelSize],
+      },
+    ])
   }
 
-  return { cancelFrame, canvas, context, frame, now, requestFrame, resize, snow }
+  /** Redraw at the current size, as an unchanged resize would. */
+  const redraw = () => {
+    resize(size.width, size.height)
+  }
+
+  return {
+    cancelFrame,
+    canvas,
+    context,
+    frame,
+    now,
+    observers,
+    queries,
+    redraw,
+    requestFrame,
+    resize,
+    snow,
+  }
 }
 
 test("fills immediately at the configured density and scales with area", () => {
@@ -108,18 +188,113 @@ test.each([
 )
 
 test("uses CSS pixels for density, size, and speed on high-resolution canvases", () => {
-  const { canvas, context, frame } = setupAnimation()
-  canvas.width = 200
-  canvas.height = 200
+  const { context, frame, resize } = setupAnimation({}, undefined, 2)
   frame(20)
   expect(context.arc).toHaveBeenCalledTimes(1)
   expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 52, 5])
   expect(context.setTransform).toHaveBeenLastCalledWith(2, 0, 0, 2, 0, 0)
 
-  canvas.clientWidth = 200
-  frame(40)
+  resize(200, 100)
   expect(context.arc).toHaveBeenCalledTimes(2)
-  expect(context.setTransform).toHaveBeenLastCalledWith(1, 0, 0, 2, 0, 0)
+  expect(context.setTransform).toHaveBeenLastCalledWith(2, 0, 0, 2, 0, 0)
+})
+
+test("sizes the canvas resolution from its displayed size times the pixel ratio", () => {
+  const { canvas, resize } = setupAnimation({}, undefined, 2)
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+
+  resize(150.5, 80)
+  expect([canvas.width, canvas.height]).toEqual([301, 160])
+})
+
+test("prefers the device-pixel size when the browser reports it", () => {
+  const { canvas, context, resize } = setupAnimation({}, undefined, 1.5)
+  resize(101, 100, { blockSize: 151, inlineSize: 152 })
+  expect([canvas.width, canvas.height]).toEqual([152, 151])
+  expect(context.setTransform).toHaveBeenLastCalledWith(152 / 101, 0, 0, 1.51, 0, 0)
+})
+
+test("watches device pixels so a pixel ratio change alone resizes the canvas", () => {
+  const { canvas, observers } = setupAnimation()
+  expect(observers[0].observe).toHaveBeenCalledWith(canvas, { box: "device-pixel-content-box" })
+})
+
+test("watches the default box where the browser rejects device pixels", () => {
+  const { canvas, observers, resize } = setupAnimation({}, undefined, 2, true)
+  expect(observers[0].observe).toHaveBeenLastCalledWith(canvas)
+
+  resize(150, 80)
+  expect([canvas.width, canvas.height]).toEqual([300, 160])
+})
+
+test("maps device-pixel sizes to physical axes in vertical writing modes", () => {
+  const { canvas, resize } = setupAnimation()
+  vi.stubGlobal("getComputedStyle", () => ({ writingMode: "vertical-rl" }))
+  resize(101, 100, { blockSize: 152, inlineSize: 151 })
+  expect([canvas.width, canvas.height]).toEqual([152, 151])
+})
+
+test("updates pixel density while paused without moving flakes", () => {
+  const { canvas, context, frame, queries, requestFrame, snow } = setupAnimation(
+    {},
+    undefined,
+    1,
+    true,
+  )
+
+  frame(20)
+  snow.paused = true
+  const requests = requestFrame.mock.calls.length
+  context.arc.mockClear()
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
+  expect(requestFrame).toHaveBeenCalledTimes(requests)
+})
+
+test("tracks successive pixel-density changes", () => {
+  const { canvas, queries } = setupAnimation({}, undefined, 1, true)
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+  vi.stubGlobal("devicePixelRatio", 3)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([300, 300])
+})
+
+test("watches density when device-pixel observations are silently unavailable", () => {
+  const { canvas, queries, resize } = setupAnimation({ paused: true })
+  resize(100, 100)
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+})
+
+test("redraws after a resize without advancing time", () => {
+  const { context, frame, resize } = setupAnimation()
+  frame(20)
+  resize(200, 100)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 200, 100)
+})
+
+test.each([
+  { count: 2, fillMode: "instant" },
+  { count: 1, fillMode: "none" },
+])("resizing while paused keeps flakes put with fillMode $fillMode", ({ count, fillMode }) => {
+  const { context, frame, resize, snow } = setupAnimation({ fillMode: "instant" })
+  frame(20)
+  snow.paused = true
+  snow.fillMode = fillMode
+  resize(200, 100)
+  expect(context.arc).toHaveBeenCalledTimes(count)
+  expect(context.arc.mock.calls.filter(([x, y]) => x === 50 && y === 52)).toHaveLength(1)
+})
+
+test("no longer exposes draw", () => {
+  const { snow } = setupAnimation()
+  expect(snow).not.toHaveProperty("draw")
 })
 
 test.each([
@@ -179,13 +354,13 @@ test("lets arrivals cover new space after resizing when fillMode is none", () =>
 })
 
 test("keeps visible attributes and uses new settings for independent arrivals", () => {
-  const { context, frame, snow } = setupAnimation()
+  const { context, frame, redraw, snow } = setupAnimation()
   snow.flakeSize = 20
   snow.flakeSpeed = 200
   snow.flakeDirection = -90
   snow.flakeColor = "blue"
   context.arc.mockClear()
-  snow.draw()
+  redraw()
   expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
   expect(context.fillStyle).toBe("rgba(255,255,255,0.9)")
   frame(100)
@@ -208,9 +383,9 @@ test("keeps visible attributes and uses new settings for independent arrivals", 
 })
 
 test("switching fillMode to instant only fills newly exposed space", () => {
-  const { context, resize, snow } = setupAnimation({ fillMode: "none", flakeSpeed: 0 })
+  const { context, redraw, resize, snow } = setupAnimation({ fillMode: "none", flakeSpeed: 0 })
   snow.fillMode = "instant"
-  snow.draw()
+  redraw()
   expect(context.arc).not.toHaveBeenCalled()
   resize(200, 100)
   expect(context.arc).toHaveBeenCalledTimes(1)
@@ -304,10 +479,10 @@ test("limits movement after a long frame", () => {
 })
 
 test("redraws paused flakes without moving them and reuses the context after resizing", () => {
-  const { canvas, context, resize, snow } = setupAnimation()
+  const { canvas, context, redraw, resize, snow } = setupAnimation()
   snow.paused = true
   context.arc.mockClear()
-  snow.draw()
+  redraw()
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
   resize(200, 100)
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
@@ -445,10 +620,10 @@ test.each([
 )
 
 test("increases density through incoming flakes without filling the visible scene", () => {
-  const { context, frame, snow } = setupAnimation()
+  const { context, frame, redraw, snow } = setupAnimation()
   snow.density = 400
   context.arc.mockClear()
-  snow.draw()
+  redraw()
   expect(context.arc).toHaveBeenCalledTimes(1)
   expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
   frame(100)
@@ -462,7 +637,7 @@ test.each([
   { density: 100, remaining: 1 },
   { density: 0, remaining: 0 },
 ])("reduces density to $density without removing visible flakes", ({ density, remaining }) => {
-  const { context, frame, snow } = setupAnimation({ density: 400 })
+  const { context, frame, redraw, snow } = setupAnimation({ density: 400 })
   snow.density = density
   snow.flakeColor = "blue"
   /** @type {string[]} */
@@ -471,7 +646,7 @@ test.each([
     colors.push(context.fillStyle)
   })
   context.arc.mockClear()
-  snow.draw()
+  redraw()
   expect(context.arc).toHaveBeenCalledTimes(4)
 
   for (let time = 100; time <= 500; time += 100) {
@@ -504,9 +679,9 @@ test("draws old and incoming colors separately during a transition", () => {
 })
 
 test("starts arrivals after changing stationary settings without prepopulating", () => {
-  const { context, frame, snow } = setupAnimation({ fillMode: "none", flakeSpeed: 0 })
+  const { context, frame, redraw, snow } = setupAnimation({ fillMode: "none", flakeSpeed: 0 })
   snow.flakeSpeed = 100
-  snow.draw()
+  redraw()
   expect(context.arc).not.toHaveBeenCalled()
   frame(100)
   expect(context.arc).not.toHaveBeenCalled()
@@ -519,12 +694,12 @@ test("starts arrivals after changing stationary settings without prepopulating",
 })
 
 test("does not queue arrivals when density is raised and lowered while paused", () => {
-  const { context, frame, snow } = setupAnimation({ density: 0, fillMode: "none" })
+  const { context, frame, redraw, snow } = setupAnimation({ density: 0, fillMode: "none" })
   snow.paused = true
   snow.density = 1000
-  snow.draw()
+  redraw()
   snow.density = 0
-  snow.draw()
+  redraw()
   snow.paused = false
 
   for (let time = 100; time <= 1000; time += 100) {
@@ -846,21 +1021,4 @@ test("rejects an overflowing arrival rate before entering the sampling loop", ()
   expect(() => {
     frame(100)
   }).toThrow("Snowfall arrival rate must be finite")
-})
-
-test("reads the canvas size only after the resize observer reports a change", () => {
-  const resizeObserver = vi.fn(
-    class {
-      observe = vi.fn()
-    },
-  )
-
-  vi.stubGlobal("ResizeObserver", resizeObserver)
-  const { canvas, context, frame } = setupAnimation()
-  canvas.clientWidth = 200
-  frame(20)
-  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
-  resizeObserver.mock.calls[0][0]()
-  frame(40)
-  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 200, 100)
 })
