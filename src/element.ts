@@ -35,7 +35,7 @@ const observeAttributes = [...optionNames, ...elementOnlyNames].map((name) =>
 const SnowElementBase = WithAttributeProps(HTMLElement, {
   density: finiteNumber({ default: defaultSettings.density, min: 0 }),
   fillMode: pickList({ values: ["instant", "none"], default: "instant" }),
-  flakeColor: string({ default: "" }),
+  flakeColor: string({ default: defaultSettings.flakeColor }),
   flakeDirection: finiteNumber({ default: defaultSettings.flakeDirection }),
   flakeDirectionDeviation: finiteNumber({ default: defaultSettings.flakeDirectionDeviation }),
   flakeSize: finiteNumber({ default: defaultSettings.flakeSize }),
@@ -85,10 +85,7 @@ export class SnowElement extends SnowElementBase {
   }
 
   #readOptions(): SnowOptions {
-    return {
-      ...Object.fromEntries(optionNames.map((name) => [name, this[name]])),
-      flakeColor: this.hasAttribute("flake-color") ? this.flakeColor : defaultSettings.flakeColor,
-    }
+    return Object.fromEntries(optionNames.map((name) => [name, this[name]]))
   }
 
   #syncAnimation(): void {

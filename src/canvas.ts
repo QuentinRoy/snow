@@ -22,24 +22,20 @@ export function createCanvas(host: HTMLElement) {
     transformOrigin: "0 0",
   })
   let pixelRatio = 0
-  let needsPositioning = true
+  let positionChecked = false
 
   return {
     canvas,
-    get needsPositioning() {
-      return needsPositioning
-    },
     resize(box?: Pick<DOMRectReadOnly, "width" | "height">) {
-      if (needsPositioning && host.isConnected) {
+      if (!positionChecked && host.isConnected) {
         if (getComputedStyle(host).position === "static") {
-          host.style.position = "relative"
-
-          if (getComputedStyle(host).position === "static") {
-            host.style.setProperty("position", "relative", "important")
-          }
+          console.warn(
+            "snow() requires a positioned container, for example position: relative.",
+            host,
+          )
         }
 
-        needsPositioning = false
+        positionChecked = true
       }
 
       const observedRatio = pixelRatio

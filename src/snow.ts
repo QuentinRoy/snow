@@ -49,7 +49,7 @@ export interface SnowSettings {
 export interface SnowAnimation extends SnowSettings {
   /**
    * Stop the animation for good: cancel the scheduled frame, disconnect observation, and remove
-   * the owned canvas. Container positioning is left in place.
+   * the owned canvas. Container styles are left unchanged.
    * Later calls and `paused` changes do nothing.
    */
   dispose: () => void
@@ -88,7 +88,7 @@ const numericSettingKeys = [
  * The `"instant"` fill mode seeds the canvas at startup and on growth. Later flakes enter through
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
- * Size the container with CSS. Snow positions static containers and fills their padding box.
+ * Size and position the container with CSS, for example `position: relative`. Snow fills its padding box.
  * Snow owns and removes its canvas.
  */
 export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
@@ -315,8 +315,6 @@ export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
   }
 
   let pixelRatioQuery: MediaQueryList | undefined
-  let positioningFrameId: number | null = null
-  let positioningPending = false
 
   const watchPixelRatio = (): void => {
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
@@ -342,42 +340,12 @@ export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
       return
     }
 
-    if (positioningPending) {
-      // A detached container has no computed styles. Position it after connection, outside
-      // observer delivery, so changing its canvas's containing block cannot cause a resize loop.
-      positioningFrameId ??= requestAnimationFrame(() => {
-        positioningFrameId = null
-
-        if (!isDisposed) {
-          if (host.isConnected) {
-            resize()
-            positioningPending = false
-          }
-
-          // Rearm observation even if insertion/removal happened between layout passes.
-          resizeObserver.disconnect()
-          observeSize()
-        }
-      })
-
-      return
-    }
-
     for (const { contentRect, target } of entries) {
       if (target === canvas) {
         resize(contentRect)
       }
     }
   })
-
-  const observeSize = (): void => {
-    resizeObserver.observe(canvas)
-
-    if (positioningPending) {
-      // A zero-sized ancestor can keep the canvas empty even after a sized host is inserted.
-      resizeObserver.observe(host, { box: "border-box" })
-    }
-  }
 
   const dispose = (): void => {
     if (isDisposed) {
@@ -388,11 +356,6 @@ export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
     resizeObserver.disconnect()
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
     stopFrames()
-
-    if (positioningFrameId !== null) {
-      cancelAnimationFrame(positioningFrameId)
-      positioningFrameId = null
-    }
 
     context.clearRect(0, 0, canvas.width, canvas.height)
     surface.remove()
@@ -426,8 +389,7 @@ export function snow(host: HTMLElement, options?: SnowOptions): SnowAnimation {
   try {
     host.append(canvas)
     resize()
-    positioningPending = surface.needsPositioning
-    observeSize()
+    resizeObserver.observe(canvas)
     watchPixelRatio()
 
     if (!isPaused) {

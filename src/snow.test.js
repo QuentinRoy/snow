@@ -91,13 +91,8 @@ function setupAnimation(options, random, pixelRatio = 1, factory = createSnow) {
   }
 
   const style = {
-    getPropertyPriority: () => "",
     padding: "0px",
-    position: "static",
-    /** @param {string} name Property name. @param {string} value Property value. */
-    setProperty(name, value) {
-      Reflect.set(style, name, value)
-    },
+    position: "relative",
   }
 
   const canvas = {
@@ -266,7 +261,7 @@ test.each([
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
 })
 
-test("observes only its canvas and leaves automatic positioning in place on disposal", () => {
+test("observes only its canvas and preserves container styles on disposal", () => {
   const { canvas, container, observers, snow } = setupAnimation()
   expect(observers).toHaveLength(1)
   expect(observers[0].observe).toHaveBeenCalledExactlyOnceWith(canvas)

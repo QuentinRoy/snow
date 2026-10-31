@@ -271,7 +271,7 @@ test("keeps physical bitmap dimensions in vertical writing modes", async () => {
 const defaults = {
   density: 30,
   fillMode: "instant",
-  flakeColor: "",
+  flakeColor: "rgba(255,255,255,0.9)",
   flakeDirection: 0,
   flakeDirectionDeviation: 5,
   flakeSize: 10,
@@ -568,6 +568,9 @@ test("reflects strings and canonicalizes fill mode without changing markup", () 
   }
 
   element.removeAttribute("flake-color")
+  expect(element.flakeColor).toBe(defaults.flakeColor)
+  expect(element.hasAttribute("flake-color")).toBe(false)
+  element.setAttribute("flake-color", "")
   expect(element.flakeColor).toBe("")
 })
 
@@ -755,7 +758,7 @@ test("restores the rendering color when the attribute is removed", () => {
   const element = mount({ ...bigSnow, "flake-color": "red", "flake-speed": "500" })
   element.removeAttribute("flake-color")
   drawing.advance(turnover.milliseconds, turnover.count)
-  expect(element.flakeColor).toBe("")
+  expect(element.flakeColor).toBe(defaults.flakeColor)
   expect(drawing.lastFrame().arcs.length).toBeGreaterThan(0)
   expect(new Set(drawing.lastFrame().arcs.map((arc) => arc.color))).toEqual(
     new Set(["rgba(255, 255, 255, 0.9)"]),
@@ -1215,7 +1218,7 @@ test("removes its canvas when initial sizing fails", () => {
   document.body.append(container)
   expect(() => snow(container, { density: Number.MAX_VALUE })).toThrow(RangeError)
   expect(container.children).toHaveLength(0)
-  expect(container.style.position).toBe("relative")
+  expect(container.style.position).toBe("")
   expect(container.style.width).toBe("200px")
   expect(container.style.height).toBe("100px")
 })
@@ -1237,81 +1240,58 @@ test.each([0.8, 1.25, 2])("does not enlarge scrollable overflow at density %s", 
   animation.dispose()
 })
 
-test("leaves automatic positioning in place after all animations are disposed", () => {
-  const container = document.createElement("div")
-  container.style.cssText = "width: 200px; height: 100px; padding: 10px"
-  document.body.append(container)
-  const first = snow(container, { density: 0, paused: true })
-  const second = snow(container, { density: 0, paused: true })
-  const canvas = container.querySelector("canvas")
-
-  expect(container.style.position).toBe("relative")
-  expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
-  first.dispose()
-  expect(container.style.position).toBe("relative")
-  expect(container.querySelectorAll("canvas")).toHaveLength(1)
-  second.dispose()
-  expect(container.style.position).toBe("relative")
-  expect(container.querySelectorAll("canvas")).toHaveLength(0)
-})
-
-test("positions a static container and leaves it positioned after disposal", () => {
-  const host = document.createElement("div")
-  host.style.cssText = "position: static !important; width: 200px; height: 100px; padding: 10px"
-  document.body.append(host)
-  const animation = snow(host, { density: 0, paused: true })
-  const canvas = host.querySelector("canvas")
-
-  expect(canvas?.parentNode).toBe(host)
-  expect(host.children).toHaveLength(1)
-  expect(getComputedStyle(host).position).toBe("relative")
-  expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
-  animation.dispose()
-  expect(host.children).toHaveLength(0)
-  expect(host.style.position).toBe("relative")
-})
-
-test("preserves consumer style changes on disposal", () => {
-  const container = document.createElement("div")
-  container.style.cssText = "width: 200px; height: 100px"
-  document.body.append(container)
-  const animation = snow(container, { paused: true })
-  container.style.position = "fixed"
-  container.style.padding = "10px"
-  animation.dispose()
-
-  expect(container.style.position).toBe("fixed")
-  expect(container.style.padding).toBe("10px")
-})
-
-test("positions a container despite an important static stylesheet rule", () => {
+test("warns once for a static container without changing its styles", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
   const sheet = document.createElement("style")
   sheet.textContent = ".snow-static { position: static !important; }"
   const container = document.createElement("div")
   container.className = "snow-static"
   container.style.cssText = "width: 200px; height: 100px"
   document.body.append(sheet, container)
+  const inlineStyle = container.getAttribute("style")
   const animation = snow(container, { paused: true })
 
-  expect(getComputedStyle(container).position).toBe("relative")
+  expect(warn).toHaveBeenCalledExactlyOnceWith(
+    "snow() requires a positioned container, for example position: relative.",
+    container,
+  )
+  await settle()
+  expect(warn).toHaveBeenCalledTimes(1)
+  expect(getComputedStyle(container).position).toBe("static")
+  expect(container.getAttribute("style")).toBe(inlineStyle)
   animation.dispose()
-  expect(container.style.position).toBe("relative")
-  expect(container.style.getPropertyPriority("position")).toBe("important")
-  expect(getComputedStyle(container).position).toBe("relative")
+  expect(container.getAttribute("style")).toBe(inlineStyle)
 })
 
-test("positions a container first attached after animation creation", async () => {
-  const container = document.createElement("div")
-  container.style.cssText = "width: 200px; height: 100px; padding: 10px"
-  const animation = snow(container, { paused: true })
-  document.body.append(container)
-  const canvas = container.querySelector("canvas")
+test.each(["relative", "absolute", "fixed", "sticky"])(
+  "accepts a %s container without warning or changing its styles",
+  (position) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const container = document.createElement("div")
+    container.style.cssText = `position: ${position}; width: 200px; height: 100px; padding: 10px`
+    document.body.append(container)
+    const inlineStyle = container.getAttribute("style")
+    const animation = snow(container, { density: 0, paused: true })
+    const canvas = container.querySelector("canvas")
 
-  await expect.poll(() => getComputedStyle(container).position).toBe("relative")
-  await expect.poll(() => canvas?.width).toBe(220 * devicePixelRatio)
-  expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
+    expect(canvas && sizeOf(canvas)).toEqual({ height: 120, width: 220 })
+    expect(warn).not.toHaveBeenCalled()
+    animation.dispose()
+    expect(container.getAttribute("style")).toBe(inlineStyle)
+  },
+)
+
+test("checks a detached container's position when it is connected", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+  const container = document.createElement("div")
+  container.style.cssText = "width: 200px; height: 100px"
+  const animation = snow(container, { paused: true })
+  expect(warn).not.toHaveBeenCalled()
+  document.body.append(container)
+
+  await expect.poll(() => warn.mock.calls.length).toBe(1)
+  expect(container.style.position).toBe("")
   animation.dispose()
-  expect(container.style.position).toBe("relative")
 })
 
 test("preserves stylesheet positioning when a detached container is attached", async () => {
@@ -1333,66 +1313,36 @@ test("preserves stylesheet positioning when a detached container is attached", a
   expect(container.style.position).toBe("")
 })
 
-test("disposal cancels deferred positioning and makes its queued callback harmless", async () => {
-  let onFrame: FrameRequestCallback | undefined
-  vi.spyOn(window, "requestAnimationFrame").mockImplementation((nextFrame) => {
-    onFrame = nextFrame
-
-    return 777
-  })
-  const cancel = vi.spyOn(window, "cancelAnimationFrame")
+test("does not check a detached container after disposal", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
   const container = document.createElement("div")
   container.style.cssText = "width: 200px; height: 100px"
   const animation = snow(container, { paused: true })
-  document.body.append(container)
-  await expect.poll(() => onFrame).toBeDefined()
   animation.dispose()
-  expect(cancel).toHaveBeenCalledWith(777)
-  onFrame?.(0)
+  document.body.append(container)
+  await settle()
+
+  expect(warn).not.toHaveBeenCalled()
   expect(container.style.position).toBe("")
   expect(container.children).toHaveLength(0)
-})
-
-test("retries deferred positioning after removal and reinsertion before layout", async () => {
-  const frames: FrameRequestCallback[] = []
-  vi.spyOn(window, "requestAnimationFrame").mockImplementation((nextFrame) => {
-    frames.push(nextFrame)
-
-    return 777
-  })
-  const container = document.createElement("div")
-  container.style.cssText = "width: 200px; height: 100px"
-  const animation = snow(container, { paused: true })
-  document.body.append(container)
-  await expect.poll(() => frames.length).toBe(1)
-  container.remove()
-  frames.shift()?.(0)
-  document.body.append(container)
-  await expect.poll(() => frames.length).toBe(1)
-  frames.shift()?.(0)
-
-  expect(container.style.position).toBe("relative")
-  expect(container.querySelector("canvas")?.width).toBe(200 * devicePixelRatio)
-  animation.dispose()
 })
 
 test.each([
   { name: "sized", style: "width: 200px; height: 100px; padding: 10px", width: 220, height: 120 },
   { name: "padding-only", style: "width: 0; height: 0; padding: 10px", width: 20, height: 20 },
 ])(
-  "initializes a detached $name container under a zero-sized ancestor",
+  "initializes a detached positioned $name container under a zero-sized ancestor",
   async ({ style, width, height }) => {
     const ancestor = document.createElement("div")
     ancestor.style.cssText = "position: relative; width: 0; height: 0"
     const container = document.createElement("div")
-    container.style.cssText = style
+    container.style.cssText = `position: relative; ${style}`
     const animation = snow(container, { paused: true })
     await settle()
     ancestor.append(container)
     document.body.append(ancestor)
 
-    await expect.poll(() => container.style.position).toBe("relative")
-    expect(container.querySelector("canvas")?.width).toBe(width * devicePixelRatio)
+    await expect.poll(() => container.querySelector("canvas")?.width).toBe(width * devicePixelRatio)
     const canvas = container.querySelector("canvas")
     expect(canvas && sizeOf(canvas)).toEqual({ width, height })
     animation.dispose()
