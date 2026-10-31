@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vite-plus/test"
-import * as snowModule from "./snow"
-import { snow as createSnow } from "./snow"
+import * as snowModule from "./snow.ts"
+import { snow as createSnow } from "./snow.ts"
 
 /**
  * @typedef {object} FakeEntry
@@ -1177,7 +1177,7 @@ test("initializes a missing disposal symbol and disposes through it", async () =
   vi.stubGlobal("Symbol", symbolWithoutDispose)
   vi.resetModules()
 
-  const { snow: factory } = await import("./snow")
+  const { snow: factory } = await import("./snow.ts")
   expect(Symbol.dispose.description).toBe("Symbol.dispose")
 
   const { cancelFrame, context, observers, snow } = setupAnimation(
@@ -1206,7 +1206,7 @@ test("preserves an existing disposal symbol when imported without a DOM", async 
   vi.stubGlobal("document", undefined)
   vi.resetModules()
 
-  const { snow: factory } = await import("./snow")
+  const { snow: factory } = await import("./snow.ts")
   expect(Symbol.dispose).toBe(existing)
   const { cancelFrame, observers, snow } = setupAnimation(undefined, undefined, 1, false, factory)
   snow[Symbol.dispose]()

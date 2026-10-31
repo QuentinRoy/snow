@@ -23,6 +23,14 @@
     ".": {
       "types": "./dist/snow.d.ts",
       "default": "./dist/snow.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "default": "./dist/element.js"
+    },
+    "./element/register": {
+      "types": "./dist/element/register.d.ts",
+      "default": "./dist/element/register.js"
     }
   },
   "scripts": {
@@ -32,12 +40,16 @@
     "lint": "vp lint",
     "fmt": "vp fmt",
     "test": "vp test --project core",
-    "test:types": "vp test --project types"
+    "test:types": "vp test --project types",
+    "test:browser": "vp test --project element"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@quentinroy/custom-element-mixins": "jsr:1.0.0",
+    "@vitest/browser-playwright": "5.0.5",
     "eslint-plugin-tsdoc": "^0.5.2",
+    "playwright": "1.64.1",
     "typescript": "^5.9.3",
     "ultracite": "^8.1.0",
     "vite-plus": "1.4.0"

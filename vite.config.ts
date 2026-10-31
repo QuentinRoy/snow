@@ -2,6 +2,7 @@ import antiSlop from "ultracite/oxlint/anti-slop"
 import core from "ultracite/oxlint/core"
 import { selectJsPlugins } from "ultracite/oxlint/js-plugins"
 import { defineConfig } from "vite-plus"
+import { playwright } from "vite-plus/test/browser-playwright"
 
 const tsdoc = selectJsPlugins(["tsdoc"])
 
@@ -10,7 +11,7 @@ export default defineConfig({
   lint: {
     env: core.env,
     extends: [core, antiSlop, tsdoc],
-    ignorePatterns: [...(core.ignorePatterns ?? []), "demo/snow.js"],
+    ignorePatterns: [...(core.ignorePatterns ?? []), "demo/dist/**"],
     jsPlugins: tsdoc.jsPlugins,
     options: { typeAware: true, typeCheck: true },
     overrides: [
@@ -25,6 +26,18 @@ export default defineConfig({
       {
         files: ["demo/demo.js"],
         rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  caseSensitive: true,
+                  group: ["./**", "../**", "!**/*.js"],
+                  message: "Use .js extensions when importing built files in the demo.",
+                },
+              ],
+            },
+          ],
           "typescript/no-unsafe-assignment": "off",
           "typescript/no-unsafe-member-access": "off",
         },
@@ -32,18 +45,45 @@ export default defineConfig({
     ],
     rules: {
       "func-style": ["error", "declaration", { allowArrowFunctions: true }],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              caseSensitive: true,
+              group: ["./**", "../**", "!**/*.ts"],
+              message: "Use .ts extensions for relative source imports.",
+            },
+          ],
+        },
+      ],
     },
   },
   pack: {
+    // The mixin library is a devDependency; bundle it so users need nothing extra.
+    deps: { alwaysBundle: ["@quentinroy/custom-element-mixins"] },
     dts: { sourcemap: true },
-    entry: ["src/snow.ts"],
+    entry: {
+      element: "src/element.ts",
+      "element/register": "src/element-register.ts",
+      snow: "src/snow.ts",
+    },
+    hash: false,
+    // Preserve imports between public entries instead of generating facade modules.
+    inputOptions: {
+      external: ["./snow.js", "./element.js"],
+      transform: { typescript: { rewriteImportExtensions: true } },
+    },
     platform: "browser",
     sourcemap: true,
     target: "es2020",
   },
   test: {
     projects: [
-      { extends: true, test: { include: ["src/**/*.test.js"], name: "core" } },
+      {
+        extends: true,
+        test: { include: ["src/**/*.test.js"], name: "core" },
+      },
       {
         extends: true,
         test: {
@@ -54,6 +94,19 @@ export default defineConfig({
             only: true,
             tsconfig: "tsconfig.types.json",
           },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          browser: {
+            enabled: true,
+            headless: true,
+            instances: [{ browser: "chromium" }],
+            provider: playwright(),
+          },
+          include: ["src/**/*.browser.test.ts"],
+          name: "element",
         },
       },
     ],
