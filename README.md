@@ -1,6 +1,6 @@
 # Snow
 
-A snow animation for the browser, drawn on a canvas. Use it as a `<snow-fall>` element, or call the `snow()` function on a canvas you manage yourself. The package includes TypeScript declarations.
+A snow animation for the browser, drawn on a canvas. Use it as a `<snow-fall>` element, or call the `snow()` function on a container sized with CSS. The package includes TypeScript declarations.
 
 ## Installation
 
@@ -253,7 +253,7 @@ cd snow
 vp install
 ```
 
-Run commands from the repository root. The core is in [`src/snow.ts`](src/snow.ts) with tests in [`src/snow.test.js`](src/snow.test.js), which run in Node. The element is in [`src/element.ts`](src/element.ts) with tests in `src/*.browser.test.ts`, which run in Chromium through Playwright. Install the browser once with `vp exec playwright install chromium`. Continuous integration runs them in Playwright's container image instead, so its tag must match the pinned `playwright` version. The interactive demo is in [`demo/`](demo/).
+Run commands from the repository root. The core is in [`src/snow.ts`](src/snow.ts) with tests in [`src/snow.test.js`](src/snow.test.js), which run in Node. The element is in [`src/element.ts`](src/element.ts) with tests in `src/**/*.browser.test.ts`, which run in Chromium through Playwright. Install the browser once with `vp exec playwright install chromium`. Continuous integration runs them in Playwright's container image instead, so its tag must match the pinned `playwright` version. The interactive demo is in [`demo/`](demo/).
 
 To work on the demo, start the library build in one terminal:
 

@@ -308,6 +308,13 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
     animationFrameId = requestAnimationFrame(loop)
   }
 
+  const stopFrames = (): void => {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId)
+      animationFrameId = null
+    }
+  }
+
   let pixelRatioQuery: MediaQueryList | undefined
 
   const watchPixelRatio = (): void => {
@@ -351,12 +358,7 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
     isDisposed = true
     resizeObserver.disconnect()
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
-
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId)
-      animationFrameId = null
-    }
-
+    stopFrames()
     context.clearRect(0, 0, canvas.width, canvas.height)
     surface.remove()
   }
@@ -375,10 +377,7 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
       isPaused = value
 
       if (value) {
-        if (animationFrameId !== null) {
-          cancelAnimationFrame(animationFrameId)
-          animationFrameId = null
-        }
+        stopFrames()
       } else {
         startFrames()
       }

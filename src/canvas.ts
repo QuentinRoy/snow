@@ -18,25 +18,25 @@ export function createCanvas(container: HTMLElement) {
   const style = getComputedStyle(container)
   const paddingX = pixels(style.paddingLeft)
   const paddingY = pixels(style.paddingTop)
-  const horizontalEdges = paddingX + pixels(style.paddingRight)
-  const verticalEdges = paddingY + pixels(style.paddingBottom)
-  const borderBox = style.boxSizing === "border-box"
+  let width = pixels(style.width)
+  let height = pixels(style.height)
+
+  if (style.boxSizing === "border-box") {
+    width -=
+      paddingX +
+      pixels(style.paddingRight) +
+      pixels(style.borderLeftWidth) +
+      pixels(style.borderRightWidth)
+    height -=
+      paddingY +
+      pixels(style.paddingBottom) +
+      pixels(style.borderTopWidth) +
+      pixels(style.borderBottomWidth)
+  }
 
   let box: ContentBox = {
-    width: Math.max(
-      0,
-      pixels(style.width) -
-        (borderBox
-          ? horizontalEdges + pixels(style.borderLeftWidth) + pixels(style.borderRightWidth)
-          : 0),
-    ),
-    height: Math.max(
-      0,
-      pixels(style.height) -
-        (borderBox
-          ? verticalEdges + pixels(style.borderTopWidth) + pixels(style.borderBottomWidth)
-          : 0),
-    ),
+    width: Math.max(0, width),
+    height: Math.max(0, height),
     x: paddingX,
     y: paddingY,
   }
