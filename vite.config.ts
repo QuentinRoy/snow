@@ -41,4 +41,21 @@ export default defineConfig({
     sourcemap: true,
     target: "es2020",
   },
+  test: {
+    projects: [
+      { extends: true, test: { include: ["src/**/*.test.js"], name: "core" } },
+      {
+        extends: true,
+        test: {
+          name: "types",
+          typecheck: {
+            enabled: true,
+            include: ["src/**/*.test-d.ts"],
+            only: true,
+            tsconfig: "tsconfig.types.json",
+          },
+        },
+      },
+    ],
+  },
 })

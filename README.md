@@ -12,26 +12,32 @@ npm install @quentinroy/snow
 
 ## Usage
 
-Create a canvas and size it with CSS:
+Create a container and size it with CSS. Snow creates and owns its canvas:
 
 ```html
-<canvas id="snow-canvas" style="width: 800px; height: 600px"></canvas>
+<div id="snow-container" style="width: 800px; height: 600px"></div>
 ```
 
-Run this code in the browser after the canvas exists, using your application's bundler:
+Run this code in the browser after the container exists, using your application's bundler:
 
 ```js
 import { snow } from "@quentinroy/snow"
 
-const canvas = document.querySelector("#snow-canvas")
+const container = document.querySelector("#snow-container")
 
 // Create and start the snow animation.
-const animation = snow(canvas, { flakeColor: "white", density: 30, fillMode: "instant" })
+const animation = snow(container, { flakeColor: "white", density: 30, fillMode: "instant" })
 ```
 
-The options argument is optional. Call `snow(canvas)` to use the defaults.
+The options argument is optional. Call `snow(container)` to use the defaults.
 
-Snow watches the canvas and sets `canvas.width` and `canvas.height` to the displayed size multiplied by `window.devicePixelRatio`, so the drawing stays sharp on high-resolution screens, including in vertical writing modes. Snow also updates the bitmap when pixel density changes, including while paused. In browsers without device-pixel resize observation, it watches the screen resolution for changes. Don't set them yourself; size the canvas with CSS only. After every resize Snow redraws the frame, even while the animation is paused. Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills the new area at once; with `"none"`, the new area stays empty until flakes drift in. Snow uses a 2D canvas context and clears the canvas on every frame, so use a dedicated canvas for the animation.
+Snow observes the container's content box with one `ResizeObserver`. It updates the canvas's CSS size, bitmap resolution, and drawing together, so resizing does not stretch the previous frame. This works for changes to any ancestor's layout, including while paused. Pixel density changes are handled too, including in vertical writing modes; browsers without device-pixel resize observation use a screen-resolution watcher.
+
+Give the container its own width and height through CSS, layout, or `aspect-ratio`. The canvas is absolutely positioned and does not contribute to the container's size. Snow sets `position: relative` on a statically positioned container and restores the previous inline value on disposal, unless your code has since changed it. Existing children are preserved; the decorative canvas ignores pointer events. Do not style or resize that canvas yourself.
+
+Flakes in the area the old and new sizes share stay put. With `fillMode: "instant"`, Snow fills newly exposed space at once; with `"none"`, it stays empty until flakes drift in.
+
+For migration to 1.0, replace the canvas passed to `snow()` with a sized container. Canvas inputs are rejected; Snow now creates and removes the canvas itself.
 
 ## Without a bundler
 
@@ -45,12 +51,12 @@ Load Snow directly from jsDelivr using a browser module. Save this as an HTML fi
     <title>Snow</title>
   </head>
   <body>
-    <canvas id="snow-canvas" style="width: 800px; height: 600px; background: #172033"></canvas>
+    <div id="snow-container" style="width: 800px; height: 600px; background: #172033"></div>
     <script type="module">
       import { snow } from "https://cdn.jsdelivr.net/npm/@quentinroy/snow/dist/snow.js"
 
-      const canvas = document.querySelector("#snow-canvas")
-      const animation = snow(canvas)
+      const container = document.querySelector("#snow-container")
+      const animation = snow(container)
     </script>
   </body>
 </html>
@@ -101,11 +107,21 @@ animation.paused = false
 
 Size, speed, direction, and color changes apply to new arrivals. Visible flakes keep their attributes until they leave. Arrival timing is independent of departures: reducing density does not pause arrivals until the count falls below a quota. Changing a parameter never fills or clears the visible scene immediately, regardless of `fillMode`. Stationary flakes stay where they are, including when density is set to `0`. The frame-rate display changes on the next frame.
 
-Set `animation.paused = true` before removing the canvas to stop scheduling frames. To also erase the paused frame, clear the canvas yourself:
+## Stopping for good
+
+Call `dispose()` when you no longer need the animation, for example before removing the container. It cancels the scheduled frame, stops watching the container, and removes its canvas. After that, a second `dispose()`, changing `paused`, and resizing the container do nothing.
 
 ```js
-animation.paused = true
-canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height)
+animation.dispose()
+```
+
+Declare the animation with `using` and it disposes itself when the scope ends. `[Symbol.dispose]` does the same as `dispose()`. When `Symbol.dispose` is missing, importing Snow initializes it globally. This does not add support for `using` syntax: your runtime must support it, or your application must compile it.
+
+```js
+{
+  using animation = snow(container)
+  // ...
+} // Disposed here.
 ```
 
 ## Development

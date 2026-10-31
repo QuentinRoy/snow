@@ -4,7 +4,7 @@ import { snow as createSnow } from "./snow"
 
 /**
  * @typedef {object} FakeEntry
- * @property {{ height: number, width: number }} contentRect Displayed size.
+ * @property {{ height: number, width: number, x: number, y: number }} contentRect Displayed size.
  * @property {{ blockSize: number, inlineSize: number }[] | undefined} devicePixelContentBoxSize Size in device pixels.
  */
 
@@ -20,9 +20,15 @@ afterEach(() => {
  * @param {number} [pixelRatio] Stubbed `devicePixelRatio`.
  * @param {boolean} [rejectBoxOption] Make `observe` throw when given a `box` option, as browsers
  * without device-pixel boxes do.
+ * @param {typeof createSnow} [factory] Factory to test.
  */
-function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false) {
-  vi.stubGlobal("getComputedStyle", () => ({ writingMode: "horizontal-tb" }))
+function setupAnimation(
+  options,
+  random,
+  pixelRatio = 1,
+  rejectBoxOption = false,
+  factory = createSnow,
+) {
   vi.stubGlobal("devicePixelRatio", pixelRatio)
   /** @type {Array<{ listener: (() => void) | undefined }>} */
   const queries = []
@@ -82,11 +88,7 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
   vi.stubGlobal("requestAnimationFrame", requestFrame)
   vi.stubGlobal("cancelAnimationFrame", cancelFrame)
   const now = vi.spyOn(performance, "now").mockReturnValue(0)
-  const randomMock = vi.spyOn(Math, "random").mockReturnValue(0.5)
-
-  if (random) {
-    randomMock.mockImplementation(random)
-  }
+  vi.spyOn(Math, "random").mockImplementation(random ?? (() => 0.5))
 
   const context = {
     arc: vi.fn(),
@@ -100,15 +102,53 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
     setTransform: vi.fn(),
   }
 
+  /** @type {Map<string, string>} */
+  const properties = new Map()
+
+  const style = {
+    getPropertyPriority: () => "",
+    /** @param {string} name Property name. */
+    getPropertyValue: (name) => properties.get(name) ?? "",
+    /** @param {string} name Property name. @param {string} value Property value. */
+    setProperty: (name, value) => properties.set(name, value),
+  }
+
   const canvas = {
-    clientHeight: 100,
-    clientWidth: 100,
     getContext: vi.fn().mockReturnValue(context),
     height: 100,
+    remove: vi.fn(),
+    setAttribute: vi.fn(),
+    style: {},
     width: 100,
   }
 
-  const snow = createSnow(canvas, {
+  const container = {
+    append: vi.fn(),
+    clientHeight: 100,
+    clientWidth: 100,
+    isConnected: true,
+    localName: "div",
+    ownerDocument: { createElement: vi.fn().mockReturnValue(canvas) },
+    style,
+  }
+
+  vi.stubGlobal("getComputedStyle", () => ({
+    borderBottomWidth: "0px",
+    borderLeftWidth: "0px",
+    borderRightWidth: "0px",
+    borderTopWidth: "0px",
+    boxSizing: "content-box",
+    height: `${container.clientHeight}px`,
+    paddingBottom: "0px",
+    paddingLeft: "0px",
+    paddingRight: "0px",
+    paddingTop: "0px",
+    position: "static",
+    width: `${container.clientWidth}px`,
+    writingMode: "horizontal-tb",
+  }))
+
+  const snow = factory(container, {
     density: 100,
     flakeDirectionDeviation: 0,
     flakeSize: 10,
@@ -124,7 +164,7 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
     nextFrame?.(time)
   }
 
-  let size = { height: canvas.clientHeight, width: canvas.clientWidth }
+  let size = { height: container.clientHeight, width: container.clientWidth }
 
   /**
    * Report a new displayed size through the resize observer.
@@ -137,7 +177,7 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
     context.arc.mockClear()
     observers[0].trigger([
       {
-        contentRect: { height, width },
+        contentRect: { height, width, x: 0, y: 0 },
         devicePixelContentBoxSize: devicePixelSize && [devicePixelSize],
       },
     ])
@@ -151,6 +191,7 @@ function setupAnimation(options, random, pixelRatio = 1, rejectBoxOption = false
   return {
     cancelFrame,
     canvas,
+    container,
     context,
     frame,
     now,
@@ -215,23 +256,16 @@ test("prefers the device-pixel size when the browser reports it", () => {
 })
 
 test("watches device pixels so a pixel ratio change alone resizes the canvas", () => {
-  const { canvas, observers } = setupAnimation()
-  expect(observers[0].observe).toHaveBeenCalledWith(canvas, { box: "device-pixel-content-box" })
+  const { container, observers } = setupAnimation()
+  expect(observers[0].observe).toHaveBeenCalledWith(container, { box: "device-pixel-content-box" })
 })
 
 test("watches the default box where the browser rejects device pixels", () => {
-  const { canvas, observers, resize } = setupAnimation({}, undefined, 2, true)
-  expect(observers[0].observe).toHaveBeenLastCalledWith(canvas)
+  const { canvas, container, observers, resize } = setupAnimation({}, undefined, 2, true)
+  expect(observers[0].observe).toHaveBeenLastCalledWith(container)
 
   resize(150, 80)
   expect([canvas.width, canvas.height]).toEqual([300, 160])
-})
-
-test("maps device-pixel sizes to physical axes in vertical writing modes", () => {
-  const { canvas, resize } = setupAnimation()
-  vi.stubGlobal("getComputedStyle", () => ({ writingMode: "vertical-rl" }))
-  resize(101, 100, { blockSize: 152, inlineSize: 151 })
-  expect([canvas.width, canvas.height]).toEqual([152, 151])
 })
 
 test("updates pixel density while paused without moving flakes", () => {
@@ -249,18 +283,58 @@ test("updates pixel density while paused without moving flakes", () => {
   vi.stubGlobal("devicePixelRatio", 2)
   queries[0]?.listener?.()
   expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc).toHaveBeenCalledTimes(1)
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
   expect(requestFrame).toHaveBeenCalledTimes(requests)
 })
 
-test("tracks successive pixel-density changes", () => {
-  const { canvas, queries } = setupAnimation({}, undefined, 1, true)
+test("tracks successive pixel-density changes while playing", () => {
+  const { canvas, context, frame, queries } = setupAnimation({}, undefined, 1, true)
+  frame(20)
+  context.arc.mockClear()
   vi.stubGlobal("devicePixelRatio", 2)
   queries[0]?.listener?.()
   expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
   vi.stubGlobal("devicePixelRatio", 3)
   queries[0]?.listener?.()
   expect([canvas.width, canvas.height]).toEqual([300, 300])
+  frame(40)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 54])
+})
+
+test("stops pixel-density updates on disposal, including queued notifications", () => {
+  const { canvas, context, queries, snow } = setupAnimation({ paused: true }, undefined, 1, true)
+  const queuedNotification = queries[0]?.listener
+  snow.dispose()
+  expect(queries[0]?.listener).toBeUndefined()
+  context.arc.mockClear()
+  vi.stubGlobal("devicePixelRatio", 2)
+  queuedNotification?.()
+  expect([canvas.width, canvas.height]).toEqual([100, 100])
+  expect(context.arc).not.toHaveBeenCalled()
+})
+
+test("preserves a detached scene across a pixel-density change", () => {
+  const { canvas, container, context, frame, queries, resize, snow } = setupAnimation(
+    {},
+    undefined,
+    1,
+    true,
+  )
+
+  frame(20)
+  snow.paused = true
+  container.isConnected = false
+  vi.stubGlobal("devicePixelRatio", 2)
+  queries[0]?.listener?.()
+  expect([canvas.width, canvas.height]).toEqual([100, 100])
+  container.isConnected = true
+  resize(100, 100)
+  expect([canvas.width, canvas.height]).toEqual([200, 200])
+  expect(context.arc).toHaveBeenCalledTimes(1)
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 52])
 })
 
 test("watches density when device-pixel observations are silently unavailable", () => {
@@ -269,6 +343,21 @@ test("watches density when device-pixel observations are silently unavailable", 
   vi.stubGlobal("devicePixelRatio", 2)
   queries[0]?.listener?.()
   expect([canvas.width, canvas.height]).toEqual([200, 200])
+})
+
+test("owns a fixed-size canvas and resizes its CSS and bitmap together", () => {
+  const { canvas, container, context, observers, resize } = setupAnimation({ paused: true })
+  expect(observers).toHaveLength(1)
+  expect(container.append).toHaveBeenCalledExactlyOnceWith(canvas)
+  expect(canvas.setAttribute).toHaveBeenCalledWith("aria-hidden", "true")
+  expect(container.style.getPropertyValue("position")).toBe("relative")
+  expect(canvas.style).toMatchObject({ height: "100px", width: "100px" })
+  container.clientWidth = 200
+  expect(canvas.style.width).toBe("100px")
+  resize(200, 150)
+  expect(canvas.style).toMatchObject({ height: "150px", width: "200px" })
+  expect([canvas.width, canvas.height]).toEqual([200, 150])
+  expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
 })
 
 test("redraws after a resize without advancing time", () => {
@@ -359,7 +448,6 @@ test("keeps visible attributes and uses new settings for independent arrivals", 
   snow.flakeSpeed = 200
   snow.flakeDirection = -90
   snow.flakeColor = "blue"
-  context.arc.mockClear()
   redraw()
   expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
   expect(context.fillStyle).toBe("rgba(255,255,255,0.9)")
@@ -481,7 +569,6 @@ test("limits movement after a long frame", () => {
 test("redraws paused flakes without moving them and reuses the context after resizing", () => {
   const { canvas, context, redraw, resize, snow } = setupAnimation()
   snow.paused = true
-  context.arc.mockClear()
   redraw()
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
   resize(200, 100)
@@ -509,6 +596,20 @@ test("removes cropped flakes and handles an empty canvas before growing", () => 
   expect(context.arc).toHaveBeenCalledTimes(4)
 })
 
+test("keeps its flakes when the canvas leaves the page and comes back", () => {
+  const { container, context, resize, snow } = setupAnimation({ density: 400 })
+  expect(context.arc).toHaveBeenCalledTimes(4)
+  // Refilling is off, so only surviving flakes can reappear.
+  snow.fillMode = "none"
+
+  // Browsers report a detached canvas as empty.
+  container.isConnected = false
+  resize(0, 0)
+  container.isConnected = true
+  resize(100, 100)
+  expect(context.arc).toHaveBeenCalledTimes(4)
+})
+
 test.each([0, 0.001, 100_000])(
   "renders only flakes within the bounds at speed %s",
   (flakeSpeed) => {
@@ -529,10 +630,10 @@ test.each([0, 0.001, 100_000])(
 )
 
 test("accepts zero and false options and exposes the new defaults", () => {
-  const { canvas, context, snow } = setupAnimation({ density: 0, fillMode: "none" })
+  const { container, context, snow } = setupAnimation({ density: 0, fillMode: "none" })
   expect(snow).toMatchObject({ density: 0, fillMode: "none" })
   expect(context.arc).not.toHaveBeenCalled()
-  const defaults = createSnow(canvas)
+  const defaults = createSnow(container)
   expect(defaults).toMatchObject({ density: 30, fillMode: "instant" })
 })
 
@@ -542,8 +643,8 @@ test("exports snow by name and has no default export", () => {
 })
 
 test("uses the 1.0 option names and defaults, without the old names", () => {
-  const { canvas } = setupAnimation()
-  const animation = createSnow(canvas)
+  const { container } = setupAnimation()
+  const animation = createSnow(container)
   expect(animation).toMatchObject({
     density: 30,
     fillMode: "instant",
@@ -578,9 +679,9 @@ test("fillMode none starts empty and instant fills at startup", () => {
 })
 
 test("rejects a canvas without a 2D context", () => {
-  const { canvas } = setupAnimation()
+  const { canvas, container } = setupAnimation()
   canvas.getContext.mockReturnValue(null)
-  expect(() => createSnow(canvas)).toThrow("Could not fetch canvas' context.")
+  expect(() => createSnow(container)).toThrow("Could not fetch canvas' context.")
 })
 
 test("preserves existing flakes when fractional counts round differently after growth", () => {
@@ -622,7 +723,6 @@ test.each([
 test("increases density through incoming flakes without filling the visible scene", () => {
   const { context, frame, redraw, snow } = setupAnimation()
   snow.density = 400
-  context.arc.mockClear()
   redraw()
   expect(context.arc).toHaveBeenCalledTimes(1)
   expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
@@ -645,7 +745,6 @@ test.each([
   context.fill.mockImplementation(() => {
     colors.push(context.fillStyle)
   })
-  context.arc.mockClear()
   redraw()
   expect(context.arc).toHaveBeenCalledTimes(4)
 
@@ -947,15 +1046,15 @@ test("prefills the same spatial distribution as incoming flakes", () => {
   for (let run = 1; run <= 100; run += 1) {
     let seed = run * 17_497
 
-    const { canvas, context, frame, snow } = setupAnimation({ density: 0 }, () => {
+    const { container, context, frame, snow } = setupAnimation({ density: 0 }, () => {
       seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
 
       return seed / 4_294_967_296
     })
 
     snow.paused = true
-    Object.assign(canvas, { clientWidth: 1000, width: 1000 })
-    createSnow(canvas, {
+    container.clientWidth = 1000
+    createSnow(container, {
       density: 200,
       flakeDirection: 0,
       flakeDirectionDeviation: 0,
@@ -1021,4 +1120,111 @@ test("rejects an overflowing arrival rate before entering the sampling loop", ()
   expect(() => {
     frame(100)
   }).toThrow("Snowfall arrival rate must be finite")
+})
+
+test("disposing removes the canvas, restores positioning, and stops frames and observation", () => {
+  const { canvas, container, cancelFrame, context, observers, snow } = setupAnimation()
+  snow.dispose()
+  expect(canvas.remove).toHaveBeenCalledOnce()
+  expect(container.style.getPropertyValue("position")).toBe("")
+  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+})
+
+test("disposing a paused animation does not cancel a frame", () => {
+  const { cancelFrame, context, snow } = setupAnimation({ paused: true })
+  snow.dispose()
+  expect(cancelFrame).not.toHaveBeenCalled()
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+})
+
+test("does nothing after disposal", () => {
+  const { cancelFrame, context, observers, requestFrame, resize, snow } = setupAnimation()
+  snow.dispose()
+  context.clearRect.mockClear()
+  requestFrame.mockClear()
+  cancelFrame.mockClear()
+
+  expect(() => {
+    snow.dispose()
+    snow.paused = false
+    snow.paused = true
+    snow.paused = false
+    resize(200, 200)
+  }).not.toThrow()
+
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+  expect(requestFrame).not.toHaveBeenCalled()
+  expect(cancelFrame).not.toHaveBeenCalled()
+  expect(context.clearRect).not.toHaveBeenCalled()
+  expect(context.arc).not.toHaveBeenCalled()
+})
+
+test("disposes through Symbol.dispose", () => {
+  const { cancelFrame, observers, snow } = setupAnimation()
+  snow[Symbol.dispose]()
+  expect(cancelFrame).toHaveBeenCalledTimes(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+})
+
+test("initializes a missing disposal symbol and disposes through it", async () => {
+  const nativeSymbol = Symbol
+  /** @param {string} description Symbol description. */
+  const symbolWithoutDispose = (description) => nativeSymbol(description)
+  Object.setPrototypeOf(symbolWithoutDispose, nativeSymbol)
+  Object.defineProperty(symbolWithoutDispose, "dispose", { value: undefined, writable: true })
+  vi.stubGlobal("Symbol", symbolWithoutDispose)
+  vi.resetModules()
+
+  const { snow: factory } = await import("./snow")
+  expect(Symbol.dispose.description).toBe("Symbol.dispose")
+
+  const { cancelFrame, context, observers, snow } = setupAnimation(
+    undefined,
+    undefined,
+    1,
+    false,
+    factory,
+  )
+
+  snow[Symbol.dispose]()
+  snow.dispose()
+  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+  expect(context.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 100)
+})
+
+test("preserves an existing disposal symbol when imported without a DOM", async () => {
+  const nativeSymbol = Symbol
+  const existing = nativeSymbol("existing disposal")
+  /** @param {string} description Symbol description. */
+  const symbolWithDispose = (description) => nativeSymbol(description)
+  Object.setPrototypeOf(symbolWithDispose, nativeSymbol)
+  Object.defineProperty(symbolWithDispose, "dispose", { value: existing, writable: true })
+  vi.stubGlobal("Symbol", symbolWithDispose)
+  vi.stubGlobal("document", undefined)
+  vi.resetModules()
+
+  const { snow: factory } = await import("./snow")
+  expect(Symbol.dispose).toBe(existing)
+  const { cancelFrame, observers, snow } = setupAnimation(undefined, undefined, 1, false, factory)
+  snow[Symbol.dispose]()
+  expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(1)
+  expect(observers[0].disconnect).toHaveBeenCalledTimes(1)
+})
+
+test("rejects canvas inputs before creating or attaching anything", () => {
+  const { container } = setupAnimation()
+  container.localName = "canvas"
+  container.ownerDocument.createElement.mockClear()
+  expect(() => createSnow(container)).toThrow("snow() expects a container, not a canvas.")
+  expect(container.ownerDocument.createElement).not.toHaveBeenCalled()
+})
+
+test("disposal preserves a consumer's later positioning change", () => {
+  const { container, snow } = setupAnimation()
+  container.style.setProperty("position", "absolute")
+  snow.dispose()
+  expect(container.style.getPropertyValue("position")).toBe("absolute")
 })

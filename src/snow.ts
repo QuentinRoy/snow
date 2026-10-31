@@ -1,11 +1,16 @@
 import { createArrivals } from "./arrivals"
+import { createCanvas } from "./canvas"
 import { SnowFlake } from "./snow-flake"
+
+if (Symbol.dispose === undefined || Symbol.dispose === null) {
+  Reflect.set(Symbol, "dispose", Symbol("Symbol.dispose"))
+}
 
 /** How empty space gets filled. */
 export type FillMode = "instant" | "none"
 
-/** Controls and mutable settings for a snow animation. */
-export interface SnowAnimation {
+/** Mutable settings for a snow animation. */
+export interface SnowSettings {
   /**
    * Stop scheduling frames while keeping the current frame visible. Setting it back to `false`
    * continues from the same flake positions and ignores the time spent paused.
@@ -39,8 +44,16 @@ export interface SnowAnimation {
   showFps: boolean
 }
 
-/** Current appearance, motion, and density settings. */
-export type SnowSettings = SnowAnimation
+/** A running snow animation: its settings, plus teardown. */
+export interface SnowAnimation extends SnowSettings {
+  /**
+   * Stop the animation for good: cancel the scheduled frame, stop watching the container, and remove
+   * the owned canvas. Later calls and `paused` changes do nothing.
+   */
+  dispose: () => void
+  /** Same as `dispose()`, so `using animation = snow(container)` disposes at the end of the scope. */
+  [Symbol.dispose]: () => void
+}
 
 /** Settings that override the defaults at startup. */
 export type SnowOptions = Partial<SnowSettings>
@@ -87,8 +100,11 @@ const numericSettingKeys = [
  * The `"instant"` fill mode seeds the canvas at startup and on growth. Later flakes enter through
  * the edges. Existing flakes keep their settings, so changes take effect as new
  * flakes arrive.
+ * Size the container with CSS. Snow creates its own canvas and removes it on disposal.
  */
-export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnimation {
+export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimation {
+  const surface = createCanvas(container)
+  const { canvas } = surface
   const context = canvas.getContext("2d")
 
   if (context === null) {
@@ -205,11 +221,11 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
       throw new RangeError("density produces too many snowflakes")
     }
 
-    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
-
     if (nextWidth === width && nextHeight === height) {
       return
     }
+
+    const overlapCount = Math.round((animation.density * overlapWidth * overlapHeight) / 1_000_000)
 
     // Preserve the shared region; only newly exposed space needs immediate filling.
     const exposedCount = animation.fillMode === "instant" ? count - overlapCount : 0
@@ -240,21 +256,11 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
    * Setting the resolution erases the bitmap, so the redraw is required.
    */
   const resize = (
-    cssWidth: number,
-    cssHeight: number,
+    box?: Pick<DOMRectReadOnly, "width" | "height" | "x" | "y">,
     devicePixelSize?: ResizeObserverSize,
   ): void => {
     validateSettings()
-
-    const vertical =
-      devicePixelSize !== undefined && getComputedStyle(canvas).writingMode !== "horizontal-tb"
-
-    canvas.width =
-      (vertical ? devicePixelSize?.blockSize : devicePixelSize?.inlineSize) ??
-      Math.round(cssWidth * devicePixelRatio)
-    canvas.height =
-      (vertical ? devicePixelSize?.inlineSize : devicePixelSize?.blockSize) ??
-      Math.round(cssHeight * devicePixelRatio)
+    const { width: cssWidth, height: cssHeight } = surface.resize(box, devicePixelSize)
     applyLayout(cssWidth, cssHeight)
     render()
   }
@@ -308,10 +314,64 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
   }
 
   let isPaused = options?.paused ?? false
+  let isDisposed = false
 
   const startFrames = (): void => {
     lastFrameTime = performance.now()
     animationFrameId = requestAnimationFrame(loop)
+  }
+
+  let pixelRatioQuery: MediaQueryList | undefined
+
+  const watchPixelRatio = (): void => {
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
+    pixelRatioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
+    pixelRatioQuery.addEventListener("change", onPixelRatioChange)
+  }
+
+  const onPixelRatioChange = (): void => {
+    if (isDisposed) {
+      return
+    }
+
+    watchPixelRatio()
+
+    if (container.isConnected) {
+      resize()
+    }
+  }
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    // A container off the page reports an empty size, which would drop every flake.
+    if (isDisposed || !container.isConnected) {
+      return
+    }
+
+    for (const { contentRect, devicePixelContentBoxSize } of entries) {
+      if (devicePixelContentBoxSize?.[0] === undefined && pixelRatioQuery === undefined) {
+        watchPixelRatio()
+      }
+
+      resize(contentRect, devicePixelContentBoxSize?.[0])
+    }
+  })
+
+  const dispose = (): void => {
+    if (isDisposed) {
+      return
+    }
+
+    isDisposed = true
+    resizeObserver.disconnect()
+    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
+
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId)
+      animationFrameId = null
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    surface.remove()
   }
 
   const animation: SnowAnimation = {
@@ -321,7 +381,7 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
       return isPaused
     },
     set paused(value) {
-      if (value === isPaused) {
+      if (isDisposed || value === isPaused) {
         return
       }
 
@@ -336,40 +396,20 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
         startFrames()
       }
     },
+    dispose,
+    [Symbol.dispose]: dispose,
   }
 
-  resize(canvas.clientWidth, canvas.clientHeight)
-
-  let pixelRatioQuery: MediaQueryList | undefined
-
-  const watchPixelRatio = (): void => {
-    pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
-    pixelRatioQuery = matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
-    pixelRatioQuery.addEventListener("change", onPixelRatioChange)
-  }
-
-  const onPixelRatioChange = (): void => {
-    watchPixelRatio()
-    resize(width, height)
-  }
-
-  const resizeObserver = new ResizeObserver((entries) => {
-    for (const { contentRect, devicePixelContentBoxSize } of entries) {
-      if (devicePixelContentBoxSize?.[0] === undefined && pixelRatioQuery === undefined) {
-        watchPixelRatio()
-      }
-
-      resize(contentRect.width, contentRect.height, devicePixelContentBoxSize?.[0])
-    }
-  })
+  resize()
+  surface.mount()
 
   try {
     // Device-pixel boxes also report a change of `devicePixelRatio` alone, such as a zoom or a move
     // to another monitor, which leaves the CSS size unchanged.
-    resizeObserver.observe(canvas, { box: "device-pixel-content-box" })
+    resizeObserver.observe(container, { box: "device-pixel-content-box" })
   } catch {
     // Browsers without device-pixel boxes reject the option.
-    resizeObserver.observe(canvas)
+    resizeObserver.observe(container)
     watchPixelRatio()
   }
 
