@@ -5,6 +5,7 @@ import { snow as createSnow } from "./snow.ts"
 /**
  * @typedef {object} FakeEntry
  * @property {{ height: number, width: number, x: number, y: number }} contentRect Displayed size.
+ * @property {unknown} target Observed canvas.
  */
 
 afterEach(() => {
@@ -156,6 +157,7 @@ function setupAnimation(options, random, pixelRatio = 1, factory = createSnow) {
     observers[0].trigger([
       {
         contentRect: { height: height * ratio, width: width * ratio, x: 0, y: 0 },
+        target: canvas,
       },
     ])
   }

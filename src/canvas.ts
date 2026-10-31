@@ -91,10 +91,19 @@ export function createCanvas(container: HTMLElement | ShadowRoot) {
   `
   let pixelRatio = 0
   let releasePosition: (() => void) | undefined
+  let needsPositioning = true
 
   return {
     canvas,
+    get needsPositioning() {
+      return needsPositioning
+    },
     resize(box?: Pick<DOMRectReadOnly, "width" | "height">) {
+      if (needsPositioning && container.isConnected) {
+        releasePosition = positionContainer(container)
+        needsPositioning = false
+      }
+
       const observedRatio = pixelRatio
 
       if (pixelRatio !== devicePixelRatio) {
@@ -123,10 +132,6 @@ export function createCanvas(container: HTMLElement | ShadowRoot) {
       canvas.height = Math.round(height * pixelRatio)
 
       return { width, height }
-    },
-    mount() {
-      releasePosition = positionContainer(container)
-      container.append(canvas)
     },
     remove() {
       canvas.remove()

@@ -315,6 +315,8 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
   }
 
   let pixelRatioQuery: MediaQueryList | undefined
+  let positioningFrameId: number | null = null
+  let positioningPending = false
 
   const watchPixelRatio = (): void => {
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
@@ -340,10 +342,43 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
       return
     }
 
-    for (const { contentRect } of entries) {
-      resize(contentRect)
+    if (positioningPending) {
+      // A detached container has no computed styles. Position it after connection, outside
+      // observer delivery, so changing its canvas's containing block cannot cause a resize loop.
+      positioningFrameId ??= requestAnimationFrame(() => {
+        positioningFrameId = null
+
+        if (!isDisposed) {
+          if (container.isConnected) {
+            resize()
+            positioningPending = false
+          }
+
+          // Rearm observation even if insertion/removal happened between layout passes.
+          resizeObserver.disconnect()
+          observeSize()
+        }
+      })
+
+      return
+    }
+
+    for (const { contentRect, target } of entries) {
+      if (target === canvas) {
+        resize(contentRect)
+      }
     }
   })
+
+  const observeSize = (): void => {
+    resizeObserver.observe(canvas)
+
+    if (positioningPending) {
+      // A zero-sized ancestor can keep the canvas empty even after a sized host is inserted.
+      const host = "host" in container ? container.host : container
+      resizeObserver.observe(host, { box: "border-box" })
+    }
+  }
 
   const dispose = (): void => {
     if (isDisposed) {
@@ -354,6 +389,12 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
     resizeObserver.disconnect()
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
     stopFrames()
+
+    if (positioningFrameId !== null) {
+      cancelAnimationFrame(positioningFrameId)
+      positioningFrameId = null
+    }
+
     context.clearRect(0, 0, canvas.width, canvas.height)
     surface.remove()
   }
@@ -384,9 +425,10 @@ export function snow(container: HTMLElement | ShadowRoot, options?: SnowOptions)
   validateSettings()
 
   try {
-    surface.mount()
+    container.append(canvas)
     resize()
-    resizeObserver.observe(canvas)
+    positioningPending = surface.needsPositioning
+    observeSize()
     watchPixelRatio()
 
     if (!isPaused) {
