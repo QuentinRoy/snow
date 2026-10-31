@@ -6,12 +6,11 @@ export type FillMode = "instant" | "none"
 
 /** Controls and mutable settings for a snow animation. */
 export interface SnowAnimation {
-  /** Pause while keeping the current frame visible. */
-  stop: () => void
-
-  /** Continue from the paused positions. */
-  resume: () => void
-
+  /**
+   * Stop scheduling frames while keeping the current frame visible. Setting it back to `false`
+   * continues from the same flake positions and ignores the time spent paused.
+   */
+  paused: boolean
   /** Average flake diameter in CSS pixels. */
   flakeSize: number
   /** Standard deviation of flake diameters in CSS pixels. */
@@ -48,7 +47,7 @@ export interface SnowAnimation {
 }
 
 /** Current appearance, motion, and density settings. */
-export type SnowSettings = Omit<SnowAnimation, "draw" | "stop" | "resume">
+export type SnowSettings = Omit<SnowAnimation, "draw">
 
 /** Settings that override the defaults at startup. */
 export type SnowOptions = Partial<SnowSettings>
@@ -76,6 +75,7 @@ const defaultOptions: SnowSettings = {
   density: 30,
   fillMode: "instant",
   showFps: false,
+  paused: false,
 }
 
 const numericSettingKeys = [
@@ -311,34 +311,43 @@ export function snow(canvas: HTMLCanvasElement, options?: SnowOptions): SnowAnim
     render()
   }
 
-  const stop = (): SnowAnimation => {
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId)
-      animationFrameId = null
-    }
+  let isPaused = options?.paused ?? false
 
-    return animation
-  }
-
-  const resume = (): SnowAnimation => {
-    if (animationFrameId === null) {
-      lastFrameTime = performance.now()
-      animationFrameId = requestAnimationFrame(loop)
-    }
-
-    return animation
+  const startFrames = (): void => {
+    lastFrameTime = performance.now()
+    animationFrameId = requestAnimationFrame(loop)
   }
 
   const animation: SnowAnimation = {
     ...defaultOptions,
     ...options,
     draw,
-    stop,
-    resume,
+    get paused() {
+      return isPaused
+    },
+    set paused(value) {
+      if (value === isPaused) {
+        return
+      }
+
+      isPaused = value
+
+      if (value) {
+        if (animationFrameId !== null) {
+          cancelAnimationFrame(animationFrameId)
+          animationFrameId = null
+        }
+      } else {
+        startFrames()
+      }
+    },
   }
 
   animation.draw()
-  resume()
+
+  if (!isPaused) {
+    startFrames()
+  }
 
   return animation
 }
