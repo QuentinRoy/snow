@@ -354,7 +354,7 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
     pixelRatioQuery?.removeEventListener("change", onPixelRatioChange)
     stopFrames()
     context.clearRect(0, 0, canvas.width, canvas.height)
-    surface.remove()
+    canvas.remove()
   }
 
   const animation: SnowAnimation = {
@@ -381,7 +381,7 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
   }
 
   validateSettings()
-  surface.mount()
+  container.append(canvas)
 
   try {
     resize()

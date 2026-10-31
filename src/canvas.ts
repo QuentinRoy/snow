@@ -57,11 +57,5 @@ export function createCanvas(container: HTMLElement) {
 
       return { width, height }
     },
-    mount() {
-      container.append(canvas)
-    },
-    remove() {
-      canvas.remove()
-    },
   }
 }
