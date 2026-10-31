@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "vite-plus/test"
-import createSnow from "./snow"
+import * as snowModule from "./snow"
+import { snow as createSnow } from "./snow"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -55,11 +56,11 @@ function setupAnimation(options, random) {
 
   const snow = createSnow(canvas, {
     density: 100,
-    meanSize: 10,
-    meanSpeed: 100,
-    sdAngle: 0,
-    sdSize: 0,
-    sdSpeed: 0,
+    flakeDirectionDeviation: 0,
+    flakeSize: 10,
+    flakeSizeDeviation: 0,
+    flakeSpeed: 100,
+    flakeSpeedDeviation: 0,
     ...options,
   })
 
@@ -131,7 +132,12 @@ test.each([
   { angle: 120, axis: 0, boundary: 105, sign: -1 },
   { angle: -120, axis: 0, boundary: -5, sign: 1 },
 ])("arrives from an incoming edge at $angle degrees", ({ angle, axis, boundary, sign }) => {
-  const { context, frame } = setupAnimation({ autoFill: false, density: 10_000, meanAngle: angle })
+  const { context, frame } = setupAnimation({
+    density: 10_000,
+    fillMode: "none",
+    flakeDirection: angle,
+  })
+
   frame(20)
   expect(context.arc.mock.calls.length).toBeGreaterThan(0)
 
@@ -143,7 +149,7 @@ test.each([
 })
 
 test("starts empty and admits flakes without waiting for a departure", () => {
-  const { context, frame } = setupAnimation({ autoFill: false })
+  const { context, frame } = setupAnimation({ fillMode: "none" })
   expect(context.arc).not.toHaveBeenCalled()
 
   for (let time = 100; time <= 400; time += 100) {
@@ -157,9 +163,9 @@ test("starts empty and admits flakes without waiting for a departure", () => {
   expect(context.arc.mock.calls[0][1]).toBeLessThan(5)
 })
 
-test("lets arrivals cover new space after resizing when autoFill is disabled", () => {
+test("lets arrivals cover new space after resizing when fillMode is none", () => {
   const { context, frame, resize, snow } = setupAnimation()
-  snow.autoFill = false
+  snow.fillMode = "none"
   resize(200, 100)
   expect(context.arc).toHaveBeenCalledTimes(1)
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
@@ -174,10 +180,10 @@ test("lets arrivals cover new space after resizing when autoFill is disabled", (
 
 test("keeps visible attributes and uses new settings for independent arrivals", () => {
   const { context, frame, snow } = setupAnimation()
-  snow.meanSize = 20
-  snow.meanSpeed = 200
-  snow.meanAngle = -90
-  snow.color = "blue"
+  snow.flakeSize = 20
+  snow.flakeSpeed = 200
+  snow.flakeDirection = -90
+  snow.flakeColor = "blue"
   context.arc.mockClear()
   snow.draw()
   expect(context.arc.mock.calls[0].slice(0, 3)).toEqual([50, 50, 5])
@@ -201,9 +207,9 @@ test("keeps visible attributes and uses new settings for independent arrivals", 
   expect(context.fillStyle).toBe("blue")
 })
 
-test("enabling autoFill only fills newly exposed space", () => {
-  const { context, resize, snow } = setupAnimation({ autoFill: false, meanSpeed: 0 })
-  snow.autoFill = true
+test("switching fillMode to instant only fills newly exposed space", () => {
+  const { context, resize, snow } = setupAnimation({ fillMode: "none", flakeSpeed: 0 })
+  snow.fillMode = "instant"
   snow.draw()
   expect(context.arc).not.toHaveBeenCalled()
   resize(200, 100)
@@ -221,19 +227,19 @@ test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
 )
 
 test("keeps negative sampled speeds stationary", () => {
-  const { context, frame } = setupAnimation({ meanSpeed: -100 })
+  const { context, frame } = setupAnimation({ flakeSpeed: -100 })
   frame(100)
   expect(context.arc.mock.calls[0].slice(0, 2)).toEqual([50, 50])
 })
 
 test("skips nonpositive sampled sizes", () => {
-  const { context, frame } = setupAnimation({ meanSize: -10 })
+  const { context, frame } = setupAnimation({ flakeSize: -10 })
   frame(100)
   expect(context.arc).not.toHaveBeenCalled()
 })
 
 test("shows a finite frame rate before the first animation frame", () => {
-  const { context, frame } = setupAnimation({ isFpsShown: true })
+  const { context, frame } = setupAnimation({ showFps: true })
   expect(context.fillText).toHaveBeenLastCalledWith("0 FPS", 10, 30)
   frame(20)
   expect(context.fillText).toHaveBeenLastCalledWith("50 FPS", 10, 30)
@@ -297,28 +303,72 @@ test("removes cropped flakes and handles an empty canvas before growing", () => 
   expect(context.arc).toHaveBeenCalledTimes(4)
 })
 
-test.each([0, 0.001, 100_000])("renders only flakes within the bounds at speed %s", (meanSpeed) => {
-  const { context, frame } = setupAnimation({ density: 400, meanAngle: 45, meanSpeed })
+test.each([0, 0.001, 100_000])(
+  "renders only flakes within the bounds at speed %s",
+  (flakeSpeed) => {
+    const { context, frame } = setupAnimation({ density: 400, flakeDirection: 45, flakeSpeed })
 
-  for (let time = 100; time <= 2000; time += 100) {
-    frame(time)
-    expect(context.arc.mock.calls.length).toBeGreaterThan(0)
+    for (let time = 100; time <= 2000; time += 100) {
+      frame(time)
+      expect(context.arc.mock.calls.length).toBeGreaterThan(0)
 
-    for (const [x, y] of context.arc.mock.calls) {
-      expect(x).toBeGreaterThanOrEqual(-5)
-      expect(x).toBeLessThanOrEqual(105)
-      expect(y).toBeGreaterThanOrEqual(-5)
-      expect(y).toBeLessThanOrEqual(105)
+      for (const [x, y] of context.arc.mock.calls) {
+        expect(x).toBeGreaterThanOrEqual(-5)
+        expect(x).toBeLessThanOrEqual(105)
+        expect(y).toBeGreaterThanOrEqual(-5)
+        expect(y).toBeLessThanOrEqual(105)
+      }
     }
+  },
+)
+
+test("accepts zero and false options and exposes the new defaults", () => {
+  const { canvas, context, snow } = setupAnimation({ density: 0, fillMode: "none" })
+  expect(snow).toMatchObject({ density: 0, fillMode: "none" })
+  expect(context.arc).not.toHaveBeenCalled()
+  const defaults = createSnow(canvas)
+  expect(defaults).toMatchObject({ density: 30, fillMode: "instant" })
+})
+
+test("exports snow by name and has no default export", () => {
+  expect(snowModule.snow).toBeInstanceOf(Function)
+  expect("default" in snowModule).toBe(false)
+})
+
+test("uses the 1.0 option names and defaults, without the old names", () => {
+  const { canvas } = setupAnimation()
+  const animation = createSnow(canvas)
+  expect(animation).toMatchObject({
+    density: 30,
+    fillMode: "instant",
+    flakeColor: "rgba(255,255,255,0.9)",
+    flakeDirection: 0,
+    flakeDirectionDeviation: 5,
+    flakeSize: 10,
+    flakeSizeDeviation: 2,
+    flakeSpeed: 150,
+    flakeSpeedDeviation: 10,
+    showFps: false,
+  })
+
+  for (const oldName of [
+    "meanSize",
+    "sdSize",
+    "meanSpeed",
+    "sdSpeed",
+    "meanAngle",
+    "sdAngle",
+    "color",
+    "autoFill",
+    "isFpsShown",
+  ]) {
+    expect(animation).not.toHaveProperty(oldName)
   }
 })
 
-test("accepts zero and false options and exposes the new defaults", () => {
-  const { canvas, context, snow } = setupAnimation({ autoFill: false, density: 0 })
-  expect(snow).toMatchObject({ autoFill: false, density: 0 })
-  expect(context.arc).not.toHaveBeenCalled()
-  const defaults = createSnow(canvas)
-  expect(defaults).toMatchObject({ autoFill: true, density: 30 })
+test("fillMode none starts empty and instant fills at startup", () => {
+  expect(setupAnimation({ fillMode: "none" }).context.arc).not.toHaveBeenCalled()
+  expect(setupAnimation({ fillMode: "instant" }).context.arc).toHaveBeenCalledTimes(1)
 })
 
 test("rejects a canvas without a 2D context", () => {
@@ -343,7 +393,7 @@ test.each([
 ])(
   "keeps visible flakes after shrinking until they leave at $angle degrees",
   ({ angle, exitTime, height, width }) => {
-    const { context, frame, resize, snow } = setupAnimation({ density: 400, meanAngle: angle })
+    const { context, frame, resize, snow } = setupAnimation({ density: 400, flakeDirection: angle })
     snow.density = 0
     resize(width, height)
     expect(context.arc).toHaveBeenCalledTimes(4)
@@ -383,7 +433,7 @@ test.each([
 ])("reduces density to $density without removing visible flakes", ({ density, remaining }) => {
   const { context, frame, snow } = setupAnimation({ density: 400 })
   snow.density = density
-  snow.color = "blue"
+  snow.flakeColor = "blue"
   /** @type {string[]} */
   const colors = []
   context.fill.mockImplementation(() => {
@@ -412,7 +462,7 @@ test("draws old and incoming colors separately during a transition", () => {
   context.fill.mockImplementation(() => {
     colors.push(context.fillStyle)
   })
-  snow.color = "blue"
+  snow.flakeColor = "blue"
   snow.density = 200
   frame(100)
   frame(200)
@@ -423,8 +473,8 @@ test("draws old and incoming colors separately during a transition", () => {
 })
 
 test("starts arrivals after changing stationary settings without prepopulating", () => {
-  const { context, frame, snow } = setupAnimation({ autoFill: false, meanSpeed: 0 })
-  snow.meanSpeed = 100
+  const { context, frame, snow } = setupAnimation({ fillMode: "none", flakeSpeed: 0 })
+  snow.flakeSpeed = 100
   snow.draw()
   expect(context.arc).not.toHaveBeenCalled()
   frame(100)
@@ -438,7 +488,7 @@ test("starts arrivals after changing stationary settings without prepopulating",
 })
 
 test("does not queue arrivals when density is raised and lowered while paused", () => {
-  const { context, frame, snow } = setupAnimation({ autoFill: false, density: 0 })
+  const { context, frame, snow } = setupAnimation({ density: 0, fillMode: "none" })
   snow.stop()
   snow.density = 1000
   snow.draw()
@@ -469,7 +519,7 @@ test("preserves survivor drawing order and appends independent new arrivals", ()
   context.fill.mockImplementation(() => {
     colors.push(context.fillStyle)
   })
-  snow.color = "blue"
+  snow.flakeColor = "blue"
   frame(100)
   colors.length = 0
   frame(200)
@@ -481,7 +531,7 @@ test("keeps arrivals going at the lower density while old dense snow leaves", ()
   const { context, frame, resize, snow } = setupAnimation({ density: 1000 })
   resize(1000, 1000)
   snow.density = 10
-  snow.color = "blue"
+  snow.flakeColor = "blue"
   /** @type {string[]} */
   const colors = []
   context.fill.mockImplementation(() => {
@@ -500,7 +550,7 @@ test("keeps arrivals going at the lower density while old dense snow leaves", ()
 test.each([
   {
     arrivalMin: 160,
-    meanSpeed: 100,
+    flakeSpeed: 100,
     populationMax: 190,
     populationMin: 145,
     speedMax: 140,
@@ -508,7 +558,7 @@ test.each([
   },
   {
     arrivalMin: 110,
-    meanSpeed: 0,
+    flakeSpeed: 0,
     populationMax: 120,
     populationMin: 80,
     speedMax: 100,
@@ -516,19 +566,19 @@ test.each([
   },
   {
     arrivalMin: 75,
-    meanSpeed: -100,
+    flakeSpeed: -100,
     populationMax: 45,
     populationMin: 20,
     speedMax: 75,
     speedMin: 40,
   },
 ])(
-  "preserves the visible speed distribution with mean $meanSpeed",
-  ({ meanSpeed, populationMin, populationMax, speedMin, speedMax, arrivalMin }) => {
+  "preserves the visible speed distribution with mean $flakeSpeed",
+  ({ flakeSpeed, populationMin, populationMax, speedMin, speedMax, arrivalMin }) => {
     let seed = 1729
 
     const { context, frame, resize } = setupAnimation(
-      { autoFill: false, density: 200, meanSpeed, sdSpeed: 100 },
+      { density: 200, fillMode: "none", flakeSpeed, flakeSpeedDeviation: 100 },
       () => {
         seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
 
@@ -593,18 +643,24 @@ test.each([
 )
 
 test.each([
-  { angle: 0, height: 1000, sdAngle: 0, size: 10, width: 1000 },
-  { angle: 90, height: 500, sdAngle: 0, size: 80, width: 2000 },
-  { angle: 60, height: 500, sdAngle: 0, size: 80, width: 2000 },
-  { angle: 120, height: 1000, sdAngle: 0, size: 10, width: 1000 },
-  { angle: 0, height: 1000, sdAngle: 90, size: 10, width: 1000 },
+  { angle: 0, flakeDirectionDeviation: 0, height: 1000, size: 10, width: 1000 },
+  { angle: 90, flakeDirectionDeviation: 0, height: 500, size: 80, width: 2000 },
+  { angle: 60, flakeDirectionDeviation: 0, height: 500, size: 80, width: 2000 },
+  { angle: 120, flakeDirectionDeviation: 0, height: 1000, size: 10, width: 1000 },
+  { angle: 0, flakeDirectionDeviation: 90, height: 1000, size: 10, width: 1000 },
 ])(
   "maintains average density at $angle degrees with size $size",
-  ({ angle, sdAngle, size, width, height }) => {
+  ({ angle, flakeDirectionDeviation, size, width, height }) => {
     let seed = 937
 
     const { context, frame, resize } = setupAnimation(
-      { autoFill: false, density: 200, meanAngle: angle, meanSize: size, sdAngle },
+      {
+        density: 200,
+        fillMode: "none",
+        flakeDirection: angle,
+        flakeDirectionDeviation,
+        flakeSize: size,
+      },
       () => {
         seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
 
@@ -654,7 +710,7 @@ test("does not wrap or restart flakes after density reaches zero", () => {
 function simulateArrivalFrames(frameStep) {
   let seed = 574
 
-  const { context, frame } = setupAnimation({ autoFill: false, density: 10_000 }, () => {
+  const { context, frame } = setupAnimation({ density: 10_000, fillMode: "none" }, () => {
     seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296
 
     return seed / 4_294_967_296
@@ -695,12 +751,12 @@ test("prefills the same spatial distribution as incoming flakes", () => {
     Object.assign(canvas, { clientWidth: 1000, width: 1000 })
     createSnow(canvas, {
       density: 200,
-      meanAngle: 0,
-      meanSize: 100,
-      meanSpeed: 100,
-      sdAngle: 0,
-      sdSize: 0,
-      sdSpeed: 0,
+      flakeDirection: 0,
+      flakeDirectionDeviation: 0,
+      flakeSize: 100,
+      flakeSizeDeviation: 0,
+      flakeSpeed: 100,
+      flakeSpeedDeviation: 0,
     })
 
     for (let time = 100; time <= 500; time += 100) {
@@ -715,19 +771,23 @@ test("prefills the same spatial distribution as incoming flakes", () => {
   expect(populationSum / 100).toBeLessThan(22)
 })
 
-test.each(["meanSize", "sdSize", "meanSpeed", "sdSpeed", "meanAngle", "sdAngle"])(
-  "rejects nonfinite %s instead of stalling the emitter",
-  (key) => {
-    expect(() => setupAnimation({ [key]: Number.POSITIVE_INFINITY })).toThrow(
-      `${key} must be a finite number`,
-    )
-  },
-)
+test.each([
+  "flakeSize",
+  "flakeSizeDeviation",
+  "flakeSpeed",
+  "flakeSpeedDeviation",
+  "flakeDirection",
+  "flakeDirectionDeviation",
+])("rejects nonfinite %s instead of stalling the emitter", (key) => {
+  expect(() => setupAnimation({ [key]: Number.POSITIVE_INFINITY })).toThrow(
+    `${key} must be a finite number`,
+  )
+})
 
 test("handles a zero random draw without a zero-length arrival loop", () => {
   let firstDraw = true
 
-  const { context, frame } = setupAnimation({ autoFill: false }, () => {
+  const { context, frame } = setupAnimation({ fillMode: "none" }, () => {
     if (firstDraw) {
       firstDraw = false
 
@@ -746,9 +806,9 @@ test("handles a zero random draw without a zero-length arrival loop", () => {
 
 test("rejects an overflowing arrival rate before entering the sampling loop", () => {
   const { frame, resize } = setupAnimation({
-    autoFill: false,
     density: 1_000_000,
-    meanSpeed: Number.MAX_VALUE,
+    fillMode: "none",
+    flakeSpeed: Number.MAX_VALUE,
   })
 
   resize(1000, 1000)
