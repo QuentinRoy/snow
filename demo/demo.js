@@ -1,9 +1,9 @@
 import { snow } from "./snow.js"
 
-const canvas = document.querySelector("#snow-canvas")
+const container = document.querySelector("#snow-container")
 
 /** @type {import("../src/snow").SnowAnimation} */
-const animation = snow(canvas)
+const animation = snow(container)
 
 window.snow = animation
 

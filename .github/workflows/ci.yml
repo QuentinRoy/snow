@@ -20,6 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm test:types
       - run: pnpm check
       - name: Prepare Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
