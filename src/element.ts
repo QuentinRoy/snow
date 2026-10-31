@@ -23,9 +23,9 @@ const optionNames = [
   "showFps",
 ] as const satisfies readonly (keyof SnowOptions)[]
 
-const elementOnlyNames = ["height", "ignoreReducedMotion", "paused", "width"] as const
+const additionalAttributeNames = ["height", "ignoreReducedMotion", "paused", "width"] as const
 
-const observeAttributes = [...optionNames, ...elementOnlyNames].map((name) =>
+const observeAttributes = [...optionNames, ...additionalAttributeNames].map((name) =>
   name
     .split(/(?=[A-Z])/u)
     .join("-")
