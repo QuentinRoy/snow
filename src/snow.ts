@@ -1,6 +1,7 @@
-import { createArrivals } from "./arrivals"
-import { createCanvas } from "./canvas"
-import { SnowFlake } from "./snow-flake"
+import { createArrivals } from "./arrivals.ts"
+import { createCanvas } from "./canvas.ts"
+import { defaultSettings } from "./defaults.ts"
+import { SnowFlake } from "./snow-flake.ts"
 
 if (Symbol.dispose === undefined || Symbol.dispose === null) {
   Reflect.set(Symbol, "dispose", Symbol("Symbol.dispose"))
@@ -68,20 +69,6 @@ export interface CanvasSize {
 interface ExposedArea extends CanvasSize {
   overlapWidth: number
   overlapHeight: number
-}
-
-const defaultOptions: SnowSettings = {
-  flakeSize: 10,
-  flakeSizeDeviation: 2,
-  flakeSpeed: 150,
-  flakeSpeedDeviation: 10,
-  flakeDirection: 0,
-  flakeDirectionDeviation: 5,
-  flakeColor: "rgba(255,255,255,0.9)",
-  density: 30,
-  fillMode: "instant",
-  showFps: false,
-  paused: false,
 }
 
 const numericSettingKeys = [
@@ -375,7 +362,7 @@ export function snow(container: HTMLElement, options?: SnowOptions): SnowAnimati
   }
 
   const animation: SnowAnimation = {
-    ...defaultOptions,
+    ...defaultSettings,
     ...options,
     get paused() {
       return isPaused
