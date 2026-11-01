@@ -1,5 +1,7 @@
 ---
-"@quentinroy/snow": major
+"@quentinroy/snow": minor
 ---
 
-Animations now have a `dispose()` method. It cancels the scheduled frame, stops watching the container, and removes the owned canvas. After that, a second `dispose()`, changes to `paused`, and resizes do nothing. Importing Snow initializes `Symbol.dispose` when missing; `using animation = snow(container)` calls `dispose()` for you at the end of the scope.
+Call `animation.dispose()` to stop the animation permanently and remove its canvas. Repeated calls, changes to `paused`, and resizes after disposal do nothing.
+
+Animations also support `using animation = snow(container)` for disposal at the end of a scope, including through the published TypeScript declarations. `[Symbol.dispose]()` does the same as `dispose()`. Importing Snow initializes `Symbol.dispose` globally when missing; your runtime must support `using` syntax, or your application must compile it.

@@ -2,4 +2,4 @@
 "@quentinroy/snow": patch
 ---
 
-Fix changing `color` recoloring every visible snowflake at once. Like size, speed, and direction, color changes now apply to new snowflakes only.
+Changing `flakeColor` now affects new snowflakes only, fixing color changes recoloring every visible flake at once. Existing flakes keep their color until they leave, as they already do for size, speed, and direction.

@@ -1,5 +1,5 @@
 ---
-"@quentinroy/snow": minor
+"@quentinroy/snow": major
 ---
 
-Add the `autoFill` option, on by default. It fills the canvas with snow at startup and fills newly exposed areas after a resize. Set it to `false` to have snow enter only through the edges.
+Snow now starts with a filled canvas and fills newly exposed areas after a resize, so snow is visible immediately. The new `fillMode` option defaults to `"instant"`. Set `fillMode: "none"` to keep the previous behavior of flakes entering only through the edges.

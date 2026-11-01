@@ -2,9 +2,9 @@
 "@quentinroy/snow": major
 ---
 
-Rename the options and switch to a named export. There are no aliases for the old names.
+Import `snow` by name: `import { snow } from "@quentinroy/snow"`. The factory and its settings have new names to make the API consistent. The default export is gone, and there are no aliases for the old option names. The `SnowAnimation` and `SnowSettings` types are now exported.
 
-Import `snow` by name: `import { snow } from "@quentinroy/snow"`. The default export is gone. The `SnowAnimation` and `SnowOptions` types are now exported.
+Use the package entry points instead of imports through `@quentinroy/snow/dist/...`; package imports now expose only `@quentinroy/snow`, `@quentinroy/snow/element`, and `@quentinroy/snow/element/register`.
 
 Rename these options:
 
@@ -16,6 +16,3 @@ Rename these options:
 - `sdAngle` to `flakeDirectionDeviation`
 - `color` to `flakeColor`
 - `isFpsShown` to `showFps`
-- `autoFill` to `fillMode`: use `"instant"` for `true` and `"none"` for `false`
-
-Behavior and defaults are unchanged.
