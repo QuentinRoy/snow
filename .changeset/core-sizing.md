@@ -2,10 +2,6 @@
 "@quentinroy/snow": major
 ---
 
-`snow()` now accepts an HTML container instead of a canvas. Position the container with CSS (for example, `position: relative`) and give it a drawing area; Snow creates and owns a decorative canvas inside it. Replace `snow(canvas, options)` with `snow(container, options)`.
+`snow()` now takes an HTML container instead of a canvas, so Snow can size its own canvas. Replace `snow(canvas, options)` with `snow(container, options)`, and give the container a position other than `static` (for example, `position: relative`); Snow warns otherwise. Snow fills the container's padding box without changing its layout.
 
-Snow fills the container's padding box, including padding, without contributing to its layout size or changing its styles. Existing content or CSS layout can determine the container's size; explicit dimensions are optional. Snow warns if the container has `position: static`.
-
-Snow handles canvas sizing and screen-resolution changes automatically, including in vertical writing modes. Resizing keeps flakes at the same size and preserves those in the area the old and new sizes share. The drawing updates even while paused, and flakes do not stretch while waiting for a resize redraw. Remove code that sets the canvas's styles or bitmap dimensions.
-
-`draw()` is removed, with no alias. Snow redraws on its own after resizes, so delete any resize code that calls it.
+Snow keeps the canvas sized and sharp when the container or screen resolution changes, and keeps flakes that stay in view. Remove code that sets the canvas size, and calls to `draw()`, which is removed.

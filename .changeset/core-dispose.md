@@ -2,6 +2,4 @@
 "@quentinroy/snow": minor
 ---
 
-Call `animation.dispose()` to stop the animation permanently and remove its canvas. Repeated calls, changes to `paused`, and resizes after disposal do nothing.
-
-Animations also support `using animation = snow(container)` for disposal at the end of a scope, including through the published TypeScript declarations. `[Symbol.dispose]()` does the same as `dispose()`. Importing Snow initializes `Symbol.dispose` globally when missing; your runtime must support `using` syntax, or your application must compile it.
+Call `animation.dispose()` to stop the animation for good and remove its canvas. Animations also work with `using animation = snow(container)`, which disposes them at the end of the scope; your runtime or compiler must support `using`. Snow defines `Symbol.dispose` if your runtime lacks it.

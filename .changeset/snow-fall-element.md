@@ -2,12 +2,10 @@
 "@quentinroy/snow": minor
 ---
 
-Add the `<snow-fall>` custom element. Import `@quentinroy/snow/element/register` and write `<snow-fall flake-color="white" density="60"></snow-fall>` to get snow with no other setup. The element is 300 × 150 pixels by default, takes its default size and aspect ratio from `width` and `height`, and lets CSS override both, like an `<img>`.
+Add the `<snow-fall>` custom element. Import `@quentinroy/snow/element/register` and write `<snow-fall></snow-fall>` to get snow with no other setup. Like an `<img>`, the element takes its default size from `width` and `height` (300 × 150 if absent), and CSS can override it.
 
-Every option is a live attribute in kebab-case, such as `flake-size` and `fill-mode`, and a property with the option's name. Numeric attributes follow HTML parsing rules, with invalid values falling back to defaults and negative density reading as zero. Numeric property assignments convert values like HTML properties; non-finite values throw for settings other than dimensions. `width` and `height` reflect like canvas dimensions. `fill-mode` matches without regard to ASCII letter case.
+Every option is a live kebab-case attribute, such as `flake-size` or `fill-mode`, and a property with the option's name. Invalid attribute values fall back to defaults.
 
-The `flakeColor` property returns the default color when `flake-color` is absent. Removing the attribute restores that default; explicitly empty attributes remain empty.
-
-Add `paused` to freeze the snow, and remove it to continue. The element also stops when the system asks for reduced motion and resumes when that setting is turned off, without changing `paused`. Add `ignore-reduced-motion` to keep animating regardless; `paused` still wins. Taking the element out of the page stops its animation; putting it back continues with the same flakes, ignoring the time away.
+Add `paused` to freeze the snow. The element also pauses when the system asks for reduced motion, unless you add `ignore-reduced-motion`. Taking the element out of the page stops its animation, and putting it back continues with the same flakes.
 
 To pick your own tag name, import `SnowElement` from `@quentinroy/snow/element` and register it yourself. Both entry points need a browser, so import them from client code only.
