@@ -6,7 +6,7 @@
   "keywords": [
     "snow"
   ],
-  "license": "MIT",
+  "license": "BlueOak-1.0.0",
   "author": "Quentin Roy <quentin@quentinroy.fr>",
   "repository": {
     "type": "git",
@@ -38,7 +38,7 @@
     "prepack": "vp pack",
     "check": "vp check",
     "lint": "vp lint",
-    "fmt": "vp fmt",
+    "format": "vp fmt",
     "test": "vp test --project core",
     "test:types": "vp test --project types",
     "test:browser": "vp test --project element"
