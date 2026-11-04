@@ -5,8 +5,11 @@ const controls = document.querySelector("#controls")
 // Settings live in the query string so a shared URL reproduces the same snowfall.
 const params = new URLSearchParams(location.search)
 
+// snowInFront is a demo-only setting, not a snow-fall property.
+const settingInputs = "#controls > .control > input:not(#snowInFront)"
+
 // Set as attributes before the element upgrades, otherwise it fills the canvas with defaults first.
-for (const input of document.querySelectorAll("#controls > .control > input")) {
+for (const input of document.querySelectorAll(settingInputs)) {
   const { id } = input
   let value = params.get(id)
 
@@ -35,25 +38,12 @@ for (const input of document.querySelectorAll("#controls > .control > input")) {
 
 await import("./snow/element/register.js")
 
-function closeControls() {
-  controls.classList.add("hidden")
-}
+// Inputs apply on change, so pressing Enter must not reload the page.
+controls.addEventListener("submit", (event) => {
+  event.preventDefault()
+})
 
-controls.querySelector(".close-button").addEventListener("click", closeControls)
-
-controls.addEventListener(
-  "click",
-  (event) => {
-    if (controls.classList.contains("hidden")) {
-      controls.classList.remove("hidden")
-      event.stopPropagation()
-    }
-  },
-  // Capture first so a click on the hidden controls only opens them, even on the close button.
-  { capture: true },
-)
-
-for (const input of document.querySelectorAll("#controls > .control > input")) {
+for (const input of document.querySelectorAll(settingInputs)) {
   const { id } = input
   const isCheckbox = input.type === "checkbox"
 
@@ -81,4 +71,16 @@ for (const input of document.querySelectorAll("#controls > .control > input")) {
   })
 }
 
-setTimeout(closeControls, 500)
+// The page CSS does the layering, snow-fall itself has no such option.
+/** @type {HTMLInputElement} */
+const snowInFront = document.querySelector("#snowInFront")
+
+snowInFront.checked = params.get("snowInFront") === "true"
+
+snowfall.toggleAttribute("data-in-front", snowInFront.checked)
+
+snowInFront.addEventListener("change", () => {
+  snowfall.toggleAttribute("data-in-front", snowInFront.checked)
+  params.set("snowInFront", String(snowInFront.checked))
+  history.replaceState(null, "", `?${params}`)
+})

@@ -1,38 +1,52 @@
 :root {
   --text-color: rgb(255, 249, 228);
   --halo-color: rgb(253, 251, 159, 0.8);
+  --halo-blur: 1rem;
   --background-color: #011627;
+
+  --space: 1rem;
+  --space-s: 0.5rem;
 
   --control-border-color: #f1e9ff;
   --control-background-color: rgba(14, 59, 94, 0.8);
   --control-halo-color: #9863fa;
   --control-halo-width: 20px;
   --control-border-width: 5px;
+  --control-radius: 2px;
+  --control-width: 20rem;
+  /* Low enough to recede, high enough to keep 4.5:1 contrast on the panel. */
+  --hint-opacity: 0.7;
 
   --control-text-color: var(--control-border-color);
   --control-button-halo: var(--control-halo-color);
 }
-html {
-  height: 100%;
-}
 
 body {
-  height: 100%;
+  box-sizing: border-box;
+  min-height: 100vh;
   margin: 0;
+  padding: var(--space);
   background: var(--background-color);
   color: var(--text-color);
   font-family: sans-serif;
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template:
+    "title controls" 1fr
+    "link link" auto
+    / 1fr auto;
   align-items: center;
-  overflow: hidden;
+  gap: var(--space);
+}
+
+main {
+  grid-area: title;
 }
 
 h1 {
+  margin: 0;
   text-align: center;
-  flex-grow: 1;
-  font-size: 5rem;
-  text-shadow: 0 0 1rem var(--halo-color);
+  font-size: clamp(2.5rem, 10vw, 5rem);
+  text-shadow: 0 0 var(--halo-blur) var(--halo-color);
 }
 
 snow-fall {
@@ -43,96 +57,96 @@ snow-fall {
   pointer-events: none;
 }
 
+snow-fall:not([data-in-front]) {
+  z-index: -1;
+}
+
 .github-link {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
+  grid-area: link;
+  justify-self: end;
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: var(--space-s);
   color: inherit;
   text-decoration: none;
 }
 
 .github-link:hover {
-  text-shadow: 0 0 1rem var(--halo-color);
+  text-shadow: 0 0 var(--halo-blur) var(--halo-color);
 }
 
 #controls {
-  --controls-h-padding: 30px;
-  --controls-v-padding: 15px;
-  transition: 400ms;
+  grid-area: controls;
   position: relative;
   box-sizing: border-box;
-  margin-right: 20px;
-  border-style: solid;
-  border-color: transparent;
-  border-width: var(--control-border-width);
-  border-radius: 2px;
+  width: var(--control-width);
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: var(--space);
+  border: var(--control-border-width) solid transparent;
+  border-radius: var(--control-radius);
   background: var(--control-background-color);
-  width: 300px;
   color: var(--control-text-color);
-  padding: var(--controls-v-padding) var(--controls-h-padding);
 }
 
 #controls::after {
   pointer-events: none;
   content: "";
   position: absolute;
-  height: 100%;
-  width: 100%;
-  top: calc(0px - var(--control-border-width));
-  left: calc(0px - var(--control-border-width));
-  border-style: solid;
-  border-width: var(--control-border-width);
-  border-radius: 2px;
-  border-color: var(--control-border-color);
+  inset: calc(0px - var(--control-border-width));
+  border: var(--control-border-width) solid var(--control-border-color);
+  border-radius: var(--control-radius);
   box-shadow:
     0 0 var(--control-halo-width) var(--control-halo-color),
     inset 0 0 var(--control-halo-width) var(--control-halo-color);
 }
 
-#controls.hidden {
-  margin-right: -270px;
-  cursor: pointer;
-}
-
-#controls .close-button {
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 1.15em;
-  font-variant: small-caps;
-  margin-top: 0.5em;
-  color: inherit;
-  opacity: 0.9;
-  cursor: pointer;
-}
-
-#controls .close-button:hover,
-#controls > .control:hover > label {
-  opacity: 1;
-  text-shadow: 0 0 1rem var(--control-button-halo);
-}
-
 #controls > .control {
-  margin: 1em 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: var(--space-s) var(--space);
 }
 
-#controls > .control > input[type="checkbox"] {
-  margin-right: 1em;
-}
-
-#controls > .control > input[type="text"],
-#controls > .control > input[type="number"] {
-  width: 100px;
-  flex-grow: 1;
-  margin-left: 1em;
+#controls > .control:hover > label {
+  text-shadow: 0 0 var(--halo-blur) var(--control-button-halo);
 }
 
 #controls > .control > label {
   cursor: pointer;
+}
+
+#controls > .control > input[type="text"],
+#controls > .control > input[type="number"] {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+#controls > .control > input[type="checkbox"] {
+  margin: 0;
+}
+
+#controls > .control > .hint {
+  flex-basis: 100%;
+  font-size: smaller;
+  opacity: var(--hint-opacity);
+}
+
+/* Media queries can't read custom properties: roughly title + --control-width. */
+@media (width < 45rem) {
+  body {
+    grid-template:
+      "title"
+      "controls"
+      "link";
+    justify-items: center;
+    padding-bottom: var(--space-s);
+  }
+
+  .github-link {
+    justify-self: center;
+    align-self: end;
+  }
 }

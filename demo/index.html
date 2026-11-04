@@ -9,9 +9,10 @@
     <script type="module" src="./demo.js"></script>
   </head>
   <body>
-    <h1>Let it snow!</h1>
-    <snow-fall></snow-fall>
-    <div id="controls">
+    <main>
+      <h1>Let it snow!</h1>
+    </main>
+    <form id="controls" aria-label="Snow settings">
       <div class="control">
         <label for="flakeSize">flake size</label>
         <input type="number" min="0" step="1" id="flakeSize" />
@@ -41,8 +42,9 @@
         <input type="number" min="0" step="5" max="180" id="flakeDirectionDeviation" />
       </div>
       <div class="control">
-        <label for="density" title="Snowflakes per 1,000 × 1,000 CSS pixels">density</label>
-        <input type="number" min="0" step="1" id="density" />
+        <label for="density">density</label>
+        <input type="number" min="0" step="1" id="density" aria-describedby="density-hint" />
+        <span id="density-hint" class="hint">snowflakes per 1,000 × 1,000 px</span>
       </div>
       <div class="control">
         <input type="checkbox" id="fillMode" />
@@ -57,9 +59,10 @@
         <label for="paused">paused</label>
       </div>
       <div class="control">
-        <button type="button" class="close-button">hide</button>
+        <input type="checkbox" id="snowInFront" />
+        <label for="snowInFront">snow in front</label>
       </div>
-    </div>
+    </form>
     <a class="github-link" href="https://github.com/QuentinRoy/snow">
       <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path
@@ -68,5 +71,7 @@
       </svg>
       GitHub
     </a>
+    <!-- Last so "snow in front" paints it over the page; pointer-events: none keeps it click-through. -->
+    <snow-fall></snow-fall>
   </body>
 </html>
