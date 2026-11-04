@@ -27,6 +27,7 @@ jobs:
       - run: pnpm check
       - uses: changesets/action@v1
         with:
+          version: pnpm version-packages
           publish: pnpm changeset publish
           createGithubReleases: true
         env:

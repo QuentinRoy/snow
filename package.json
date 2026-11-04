@@ -37,6 +37,7 @@
     "build": "vp pack",
     "prepack": "vp pack",
     "check": "vp check",
+    "version-packages": "changeset version && vp fmt CHANGELOG.md",
     "lint": "vp lint",
     "format": "vp fmt",
     "test": "vp test --project core",
