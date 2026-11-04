@@ -28,8 +28,6 @@ The element defaults to 300 × 150 CSS pixels. `width` and `height` set its defa
 <snow-fall width="800" height="400" style="width: 100%; background: #172033"></snow-fall>
 ```
 
-A bigger area shows more snow, with flakes at the same size. The element is `display: inline-block`; use `getBoundingClientRect()` to read its displayed size.
-
 Add `paused` to pause the animation, and remove it to continue.
 
 The element complies with user preferences for reduced motion: the animation freezes automatically when the browser indicates reduced motion preference. You may disable this behavior by setting the `ignore-reduced-motion` attribute.
