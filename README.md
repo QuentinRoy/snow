@@ -153,6 +153,8 @@ Pass these as options to `snow()` or set them as properties on the animation or 
 | `showFps`                 | `false`                   | Show the frame rate.                                                                               |
 | `paused`                  | `false`                   | Pause on the current frame.                                                                        |
 | `ignoreReducedMotion`     | `false`                   | Custom element only. Ignore the browser's reduced motion preference.                               |
+| `width`                   | `300`                     | Custom element only. Default width, in CSS pixels. Sets the aspect ratio with `height`.            |
+| `height`                  | `150`                     | Custom element only. Default height, in CSS pixels. Sets the aspect ratio with `width`.            |
 
 Size, speed, and direction follow normal distributions: the deviation settings control how much flakes vary.
 
